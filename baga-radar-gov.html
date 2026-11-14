@@ -1,0 +1,1703 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Баға Радар</title>
+<!--
+  БАҒА РАДАР — информационная система мониторинга цен на социально значимые
+  продовольственные товары (СЗПТ). Рабочее место специалиста по мониторингу цен.
+
+  Один файл, без серверной части. Средние цены по регионам — выгрузка БНС АСПиР РК
+  (форма Ц-101э), вшита в файл скриптом fetch-prices.py между маркерами SZPT-DATA.
+  Наблюдения по торговым точкам — демонстрационные, формируются детерминированно.
+-->
+<style>
+/* ============================= токены ============================= */
+:root{
+  --bg:#F6F3EC; --surface:#FFFFFF; --line:#E0DBD0; --line-2:#EDE8DF;
+  --ink:#1C1A16; --ink-2:#55504A; --muted:#7E776D;
+  --accent:#1F4E79; --accent-weak:#EEF3F8; --accent-line:#C7D7E6;
+  --red:#B3261E; --amber:#A66300; --green:#1E6B3A;
+  --row:38px;
+  --font:'Inter','IBM Plex Sans',system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--bg); color:var(--ink); font-family:var(--font); font-size:14px; line-height:1.45;
+     -webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit; color:inherit}
+a{color:var(--accent)}
+.num{text-align:right; font-variant-numeric:tabular-nums}
+.tnum{font-variant-numeric:tabular-nums}
+.mut{color:var(--muted)}
+.nowrap{white-space:nowrap}
+
+/* ============================= каркас ============================= */
+.shell{display:grid; grid-template-columns:216px minmax(0,1fr); min-height:100vh}
+
+.side{background:var(--surface); border-right:1px solid var(--line); position:sticky; top:0;
+      height:100vh; display:flex; flex-direction:column; overflow:auto}
+.side .brand{padding:16px; border-bottom:1px solid var(--line)}
+.side .brand b{display:block; font-size:15px; letter-spacing:-.01em}
+.side .brand span{display:block; font-size:11.5px; color:var(--muted); line-height:1.35; margin-top:3px}
+.side nav{padding:8px 0; flex:1}
+.side .grp{font-size:11px; color:var(--muted); padding:12px 16px 5px}
+.side a.mi{display:flex; align-items:center; gap:8px; padding:8px 16px; font-size:13.5px;
+           color:var(--ink-2); text-decoration:none; border-left:3px solid transparent; cursor:pointer}
+.side a.mi:hover{background:#FAF7F0; color:var(--ink)}
+.side a.mi.on{background:var(--accent-weak); color:var(--accent); border-left-color:var(--accent); font-weight:600}
+.side a.mi .cnt{margin-left:auto; font-size:11.5px; color:var(--muted); font-variant-numeric:tabular-nums}
+.side a.mi.on .cnt{color:var(--accent)}
+.side .foot{border-top:1px solid var(--line); padding:8px 0}
+
+.main{min-width:0; display:flex; flex-direction:column}
+
+/* ============================= шапка ============================= */
+.hdr{background:var(--surface); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:6}
+.hdr .r1{display:flex; align-items:center; gap:16px; padding:10px 20px}
+.hdr h1{font-size:16px; font-weight:600; margin:0; letter-spacing:-.01em}
+.hdr .sp{flex:1}
+.hdr .who{text-align:right; font-size:12.5px; line-height:1.3}
+.hdr .who span{color:var(--ink-2); font-size:12.5px}
+.hdr .r2{display:flex; align-items:center; gap:18px; padding:7px 20px; border-top:1px solid var(--line-2);
+         background:#FBF9F3; font-size:12.5px; flex-wrap:wrap}
+.hdr .fld{display:flex; align-items:center; gap:6px}
+.hdr .fld label{color:var(--muted)}
+.hdr .upd{margin-left:auto; color:var(--muted); font-size:12px}
+
+/* ============================= элементы ============================= */
+select,input[type=text],input[type=date],textarea{
+  background:var(--surface); border:1px solid var(--line); border-radius:4px; padding:5px 8px;
+  font-size:13px; color:var(--ink); outline:none}
+select:focus,input:focus,textarea:focus{border-color:var(--accent); box-shadow:inset 0 0 0 1px var(--accent)}
+select{padding-right:22px}
+.btn{background:var(--surface); border:1px solid var(--line); border-radius:4px; padding:6px 12px;
+     font-size:13px; cursor:pointer; color:var(--ink)}
+.btn:hover{background:#F1EDE4}
+.btn-p{background:var(--accent); border-color:var(--accent); color:#fff}
+.btn-p:hover{background:#19406A}
+.btn-sm{padding:4px 9px; font-size:12.5px}
+.btn:disabled{color:var(--muted); background:#F6F3EC; cursor:default}
+
+.panel{background:var(--surface); border:1px solid var(--line); border-radius:4px}
+.panel>.ph{display:flex; align-items:center; gap:12px; padding:10px 14px; border-bottom:1px solid var(--line)}
+.panel>.ph h2{font-size:16px; font-weight:600; margin:0}
+.panel>.ph .sp{flex:1}
+.panel>.pb{padding:14px}
+
+.page{padding:16px 20px 28px; display:none}
+.page.on{display:block}
+.page>.pt{margin:0 0 14px}
+.page>.pt h2{font-size:16px; font-weight:600; margin:0 0 3px}
+.page>.pt p{margin:0; font-size:12.5px; color:var(--ink-2); max-width:112ch}
+
+/* ============================= таблицы ============================= */
+.tw{overflow:auto; max-width:100%}
+table.t{width:100%; border-collapse:collapse; font-size:13px}
+table.t th{position:sticky; top:0; background:#FBF9F3; border-bottom:1px solid var(--line);
+  text-align:left; font-weight:600; font-size:12px; color:var(--ink-2); padding:7px 10px;
+  white-space:nowrap; z-index:1}
+table.t th.num{text-align:right}
+table.t th.srt{cursor:pointer; user-select:none}
+table.t th.srt:hover{color:var(--accent)}
+table.t th .ar{color:var(--accent); font-size:10px}
+table.t td{border-bottom:1px solid var(--line-2); padding:0 10px; height:var(--row); vertical-align:middle}
+table.t tbody tr:hover{background:#FAF7F0}
+table.t tbody tr.sel{background:var(--accent-weak)}
+table.t tbody tr.sel td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
+table.t.click tbody tr{cursor:pointer}
+table.t tbody tr.off td{color:var(--muted)}
+table.t td.cut{max-width:270px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+table.t td.cut-s{max-width:230px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.empty{padding:28px 14px; text-align:center; color:var(--muted); font-size:13px}
+
+/* ============================= статусы ============================= */
+.st{display:inline-flex; align-items:center; gap:6px; white-space:nowrap}
+.st i{width:8px; height:8px; border-radius:50%; flex:none; background:var(--muted)}
+.st.high i{background:var(--red)} .st.mid i{background:var(--amber)} .st.norm i{background:var(--green)}
+.st.high{color:var(--red)} .st.mid{color:var(--amber)}
+.tag{display:inline-block; border:1px solid var(--line); border-radius:3px; padding:1px 6px;
+     font-size:11.5px; color:var(--ink-2); background:#FBF9F3; white-space:nowrap}
+.dev.up{color:var(--red)} .dev.dn{color:var(--green)}
+
+/* ============================= сводная строка ============================= */
+.sum{display:flex; gap:0; flex-wrap:wrap; border:1px solid var(--line); border-radius:4px;
+     background:var(--surface); margin-bottom:12px}
+.sum div{padding:8px 14px; border-right:1px solid var(--line-2); font-size:12.5px}
+.sum div:last-child{border-right:0}
+.sum b{font-variant-numeric:tabular-nums; font-weight:600; margin-right:5px}
+
+.rmap{display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:6px; padding:14px}
+.rg{border:1px solid var(--line); border-radius:4px; background:var(--surface); padding:7px 8px;
+    text-align:left; cursor:pointer; min-width:0; font:inherit; color:inherit}
+.rg:hover{border-color:var(--accent)}
+.rg.home{box-shadow:inset 0 0 0 1px var(--accent); border-color:var(--accent)}
+.rg .nm{display:block; font-size:11px; color:var(--ink-2); white-space:nowrap; overflow:hidden;
+        text-overflow:ellipsis; margin-bottom:3px}
+.rg .pr{display:block; font-size:13.5px; font-weight:600; font-variant-numeric:tabular-nums}
+.rg .dv{display:block; font-size:11px; font-variant-numeric:tabular-nums; color:var(--muted); margin-top:1px}
+.rg .st{font-size:11px; margin-top:3px}
+@media (max-width:1100px){ .rmap{grid-template-columns:repeat(4,minmax(0,1fr))} .rg{grid-column:auto!important; grid-row:auto!important} }
+@media (max-width:700px){ .rmap{grid-template-columns:repeat(2,minmax(0,1fr))} }
+
+.fx td.cur{white-space:nowrap}
+.fx td.cur b{font-weight:600}
+.fx td.cur span{color:var(--muted); font-size:11.5px; margin-left:5px}
+.fx td.rate{font-size:15px; font-weight:600}
+.fx .pct{color:var(--muted); font-size:11.5px; margin-left:4px}
+.fx .spark{display:block}
+.fx .spark path{fill:none; stroke:var(--ink-2); stroke-width:1.3}
+.fx .spark circle{fill:var(--accent)}
+
+/* ============================= фильтры ============================= */
+.flt{display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; padding:10px 14px;
+     border-bottom:1px solid var(--line); background:#FBF9F3}
+.flt .f{display:flex; flex-direction:column; gap:3px}
+.flt .f label{font-size:11.5px; color:var(--muted)}
+.flt .sp{flex:1}
+
+/* ============================= рабочая область ============================= */
+.work{display:grid; grid-template-columns:minmax(0,1fr) 430px; gap:16px; align-items:start}
+.work.wide{grid-template-columns:minmax(0,1fr)}
+.work.wide .insp{display:none}
+.insp{position:sticky; top:96px}
+.insp .sec{padding:12px 14px; border-bottom:1px solid var(--line-2)}
+.insp .sec:last-child{border-bottom:0}
+.insp h3{font-size:13px; font-weight:600; margin:0 0 8px}
+.insp .close{margin-left:auto; background:none; border:0; cursor:pointer; color:var(--muted); font-size:15px; padding:0 2px}
+.insp .close:hover{color:var(--ink)}
+
+dl.kv{margin:0; display:grid; grid-template-columns:auto 1fr; gap:5px 14px; font-size:12.5px}
+dl.kv dt{color:var(--muted)}
+dl.kv dd{margin:0; text-align:right; font-variant-numeric:tabular-nums}
+dl.kv dd.l{text-align:left}
+
+.chart{width:100%; height:150px; display:block}
+.chart text{font-family:var(--font); font-size:10px; fill:var(--muted)}
+.lg{display:flex; gap:14px; font-size:11.5px; color:var(--ink-2); margin-top:6px; flex-wrap:wrap}
+.lg i{display:inline-block; width:14px; height:0; border-top:2px solid; margin-right:5px; vertical-align:middle}
+
+.ev{border:1px solid var(--line); border-radius:4px; padding:10px; font-size:12.5px; background:#FBF9F3}
+.ev .ph{height:92px; border:1px dashed var(--line); border-radius:3px; display:flex; align-items:center;
+        justify-content:center; color:var(--muted); font-size:12px; background:var(--surface); margin-bottom:8px;
+        overflow:hidden}
+.ev .ph img{max-width:100%; max-height:92px; display:block}
+
+.act{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px}
+textarea{width:100%; resize:vertical; min-height:58px; font-size:13px}
+
+/* ============================= загрузка ============================= */
+.drop{display:block; border:1px dashed var(--line); border-radius:4px; background:#FBF9F3;
+      padding:22px; text-align:center; cursor:pointer; font-size:13px; color:var(--ink-2)}
+.drop:hover{border-color:var(--accent); background:var(--accent-weak)}
+.drop b{display:block; font-weight:600; color:var(--ink); margin-bottom:3px}
+.sr{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0)}
+.err-row td{background:#FCF3F0}
+.fix-row td{background:#F3F7EF}
+
+/* ============================= вкладки ============================= */
+.tabs{display:flex; gap:0; border-bottom:1px solid var(--line); background:#FBF9F3}
+.tabs button{background:none; border:0; border-bottom:2px solid transparent; padding:9px 14px;
+             font-size:13px; cursor:pointer; color:var(--ink-2)}
+.tabs button:hover{color:var(--ink)}
+.tabs button.on{color:var(--accent); border-bottom-color:var(--accent); font-weight:600}
+
+/* ============================= служебное ============================= */
+.note{font-size:11.5px; color:var(--muted); margin:8px 0 0}
+.mdl{border-bottom:1px dotted var(--muted); cursor:help}
+.pagefoot{padding:14px 20px 22px; color:var(--muted); font-size:11.5px; border-top:1px solid var(--line);
+          margin-top:auto; background:var(--surface)}
+.toast{position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:#1C1A16; color:#fff;
+       padding:9px 16px; border-radius:4px; font-size:13px; opacity:0; pointer-events:none; transition:opacity .15s; z-index:40}
+.toast.on{opacity:1}
+
+@media (max-width:1180px){
+  .work{grid-template-columns:minmax(0,1fr)}
+  .insp{position:static}
+}
+@media (max-width:860px){
+  .shell{grid-template-columns:1fr}
+  .side{position:static; height:auto; flex-direction:row; overflow-x:auto; border-right:0; border-bottom:1px solid var(--line)}
+  .side .brand,.side .foot{display:none}
+  .side nav{display:flex; padding:0}
+  .side .grp{display:none}
+  .side a.mi{border-left:0; border-bottom:3px solid transparent; white-space:nowrap}
+  .side a.mi.on{border-left:0; border-bottom-color:var(--accent)}
+}
+</style>
+
+<div class="shell">
+
+<!-- ======================= боковое меню ======================= -->
+<aside class="side">
+  <div class="brand">
+    <b>Баға Радар</b>
+    <span>Мониторинг цен на социально значимые продовольственные товары</span>
+  </div>
+  <nav id="menu"></nav>
+  <div class="foot"><a class="mi" data-scr="settings">Настройки</a></div>
+</aside>
+
+<div class="main">
+
+<!-- ======================= шапка ======================= -->
+<header class="hdr">
+  <div class="r1">
+    <h1 id="scrTitle">Сигналы</h1>
+    <div class="sp"></div>
+    <div class="who">
+      <span>Главный специалист отдела внутренней торговли</span>
+    </div>
+  </div>
+  <div class="r2">
+    <div class="fld">
+      <label for="hRegion">Регион</label>
+      <select id="hRegion" onchange="App.setRegion(this.value)"></select>
+    </div>
+    <div class="fld">
+      <label for="hWeek">Период</label>
+      <select id="hWeek" onchange="App.setWeek(this.value)"></select>
+    </div>
+    <div class="upd" id="hUpd">Данные обновлены: 14.11.2026 09:00 · Источник: мониторинг акимата</div>
+  </div>
+</header>
+
+<!-- ======================= 1. СИГНАЛЫ ======================= -->
+<section class="page on" id="sc-signals">
+  <div class="sum" id="sgSum"></div>
+
+  <div class="work" id="sgWork">
+    <div class="panel">
+      <div class="flt">
+        <div class="f"><label for="fDistrict">Район</label>
+          <select id="fDistrict" onchange="Sig.render()"></select></div>
+        <div class="f"><label for="fProduct">Товар</label>
+          <select id="fProduct" onchange="Sig.render()"></select></div>
+        <div class="f"><label for="fLevel">Уровень</label>
+          <select id="fLevel" onchange="Sig.render()">
+            <option value="">все</option><option value="high">Высокий</option>
+            <option value="mid">Средний</option><option value="norm">Норма</option></select></div>
+        <div class="f"><label for="fStatus">Статус проверки</label>
+          <select id="fStatus" onchange="Sig.render()"></select></div>
+        <div class="f"><label for="fOwner">Ответственный</label>
+          <select id="fOwner" onchange="Sig.render()"></select></div>
+        <div class="f"><label for="fSearch">Поиск</label>
+          <input type="text" id="fSearch" placeholder="товар, точка, код" oninput="Sig.render()" style="width:150px"></div>
+        <div class="sp"></div>
+        <div class="f"><button class="btn btn-sm" onclick="Sig.reset()">Сбросить</button></div>
+      </div>
+      <div class="tw" style="max-height:calc(100vh - 250px)">
+        <table class="t click" id="sgTable">
+          <thead><tr id="sgHead"></tr></thead>
+          <tbody id="sgBody"></tbody>
+        </table>
+      </div>
+      <div style="padding:8px 14px; border-top:1px solid var(--line); font-size:12px; color:var(--muted)"
+           id="sgCount"></div>
+    </div>
+
+    <div class="panel insp" id="sgInsp"></div>
+  </div>
+</section>
+
+<!-- ======================= ОБРАЩЕНИЯ ГРАЖДАН ======================= -->
+<section class="page" id="sc-appeals">
+  <div class="pt">
+    <h2>Обращения граждан</h2>
+    <p>Обращения по ценам на СЗПТ, поступившие через форму приёма. Каждое обращение содержит
+       фотографию ценника и передаётся в служебный канал отдела в Telegram. Обращение является
+       первичным материалом: при подтверждении отклонения оно рассматривается вместе с данными
+       наблюдения по торговой точке.</p>
+  </div>
+  <div class="panel">
+    <div class="flt">
+      <div class="f"><button class="btn btn-sm" onclick="Appeals.load()">Обновить</button></div>
+      <div class="f"><a class="btn btn-sm" href="obrashenie.html" target="_blank" rel="noopener"
+         style="text-decoration:none;display:inline-block">Открыть форму приёма обращений</a></div>
+      <div class="sp"></div>
+      <div class="f"><button class="btn btn-sm" onclick="Appeals.csv()">Выгрузить в CSV</button></div>
+    </div>
+    <div class="tw" style="max-height:calc(100vh - 300px)">
+      <table class="t"><thead><tr>
+        <th>Дата и время</th><th>Регион</th><th>Товар</th><th>Торговая точка</th>
+        <th class="num">Цена на ценнике</th><th>Материал</th><th>Передача в Telegram</th>
+        <th>Пояснение</th><th>Обратная связь</th>
+      </tr></thead><tbody id="apBody"></tbody></table>
+    </div>
+    <div style="padding:8px 14px; border-top:1px solid var(--line); font-size:12px; color:var(--muted)"
+         id="apCount"></div>
+  </div>
+</section>
+
+<!-- ======================= 2. ЦЕНЫ ======================= -->
+<section class="page" id="sc-prices">
+  <div class="pt">
+    <h2>Цены на СЗПТ</h2>
+    <p>Перечень социально значимых продовольственных товаров — 31 позиция. Средняя цена по региону
+       и индекс к предыдущей неделе — по данным Бюро национальной статистики АСПиР РК (форма Ц-101э).
+       Медиана, минимум и максимум по районам — по наблюдениям мониторинга акимата.</p>
+  </div>
+
+  <div class="panel" id="mapPanel" style="margin-bottom:16px"></div>
+
+  <div class="panel" id="fxPanel" style="margin-bottom:16px"></div>
+
+  <div class="work" id="prWork">
+    <div class="panel">
+      <div class="flt">
+        <div class="f"><label for="prSearch">Поиск по перечню</label>
+          <input type="text" id="prSearch" placeholder="наименование товара" oninput="Prices.render()" style="width:220px"></div>
+        <div class="f"><label for="prGroup">Отбор</label>
+          <select id="prGroup" onchange="Prices.render()">
+            <option value="">весь перечень</option>
+            <option value="up">рост за неделю</option>
+            <option value="dn">снижение за неделю</option>
+            <option value="spread">разброс по районам свыше 10%</option>
+          </select></div>
+      </div>
+      <div class="tw" style="max-height:calc(100vh - 280px)">
+        <table class="t click"><thead><tr id="prHead"></tr></thead><tbody id="prBody"></tbody></table>
+      </div>
+      <div style="padding:8px 14px; border-top:1px solid var(--line)" id="prSrc"></div>
+    </div>
+    <div class="panel insp" id="prInsp"></div>
+  </div>
+</section>
+
+<!-- ======================= 3. ЗАГРУЗКА ДАННЫХ ======================= -->
+<section class="page" id="sc-upload">
+  <div class="pt">
+    <h2>Загрузка данных</h2>
+    <p>Приём недельных наблюдений от торговых точек и районных отделов. Поддерживаются файлы Excel (.xlsx)
+       и CSV. Перед записью в базу выполняется проверка: соответствие товара перечню СЗПТ, единица измерения,
+       отклонение цены от медианы района, повторные строки.</p>
+  </div>
+
+  <div class="panel" style="margin-bottom:16px">
+    <div class="pb">
+      <label class="drop" for="upFile" id="upDrop">
+        <b>Выберите файл или перетащите его сюда</b>
+        <span>.xlsx, .csv · столбцы: код точки, товар, цена, единица, дата наблюдения</span>
+      </label>
+      <input type="file" id="upFile" class="sr" accept=".csv,.xlsx,.xls,text/csv" onchange="Upload.pick(this)">
+      <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; align-items:center">
+        <button class="btn" onclick="Upload.sample()">Загрузить пример выгрузки</button>
+        <button class="btn" onclick="Upload.template()">Скачать шаблон CSV</button>
+        <span class="note" style="margin:0">Файл обрабатывается в браузере и никуда не передаётся.</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="upResult"></div>
+</section>
+
+<!-- ======================= 4. СПРАВОЧНИКИ ======================= -->
+<section class="page" id="sc-ref">
+  <div class="pt">
+    <h2>Справочники</h2>
+    <p>Нормативно-справочная информация: перечень СЗПТ и реестр торговых точек, по которым ведётся
+       наблюдение в регионе.</p>
+  </div>
+  <div class="panel">
+    <div class="tabs">
+      <button class="on" data-ref="prod" onclick="Ref.tab('prod')">Товары</button>
+      <button data-ref="pts" onclick="Ref.tab('pts')">Торговые точки</button>
+    </div>
+    <div class="flt">
+      <div class="f"><label for="rfSearch">Поиск</label>
+        <input type="text" id="rfSearch" placeholder="наименование, код" oninput="Ref.render()" style="width:220px"></div>
+      <div class="f" id="rfDistrictBox" hidden><label for="rfDistrict">Район</label>
+        <select id="rfDistrict" onchange="Ref.render()"></select></div>
+      <div class="sp"></div>
+      <div class="f"><button class="btn btn-sm" onclick="Ref.csv()">Выгрузить в CSV</button></div>
+    </div>
+    <div class="tw" style="max-height:calc(100vh - 300px)">
+      <table class="t"><thead><tr id="rfHead"></tr></thead><tbody id="rfBody"></tbody></table>
+    </div>
+    <div style="padding:8px 14px; border-top:1px solid var(--line); font-size:12px; color:var(--muted)" id="rfCount"></div>
+  </div>
+</section>
+
+<!-- ======================= 5. ОТЧЁТЫ ======================= -->
+<section class="page" id="sc-reports">
+  <div class="pt">
+    <h2>Отчёты</h2>
+    <p>Формирование отчётных форм за выбранный период. Отчёты с модельными показателями помечены
+       отдельно: такие значения не являются данными наблюдения.</p>
+  </div>
+  <div class="work" id="rpWork">
+    <div class="panel">
+      <div class="ph"><h2>Отчётные формы</h2></div>
+      <div class="tw"><table class="t click"><thead><tr>
+        <th>Наименование</th><th>Период</th><th>Основание</th><th class="num">Строк</th>
+      </tr></thead><tbody id="rpBody"></tbody></table></div>
+    </div>
+    <div class="panel insp" id="rpInsp"></div>
+  </div>
+</section>
+
+<!-- ======================= 6. ЖУРНАЛ РЕШЕНИЙ ======================= -->
+<section class="page" id="sc-journal">
+  <div class="pt">
+    <h2>Журнал решений</h2>
+    <p>Записи о решениях по сигналам и о загрузках данных. Запись содержит дату и время, пользователя,
+       объект и принятое решение. Записи не редактируются.</p>
+  </div>
+  <div class="panel">
+    <div class="flt">
+      <div class="f"><label for="jrSearch">Поиск</label>
+        <input type="text" id="jrSearch" placeholder="объект, решение, комментарий" oninput="Journal.render()" style="width:240px"></div>
+      <div class="f"><label for="jrAct">Решение</label><select id="jrAct" onchange="Journal.render()"></select></div>
+      <div class="sp"></div>
+      <div class="f"><button class="btn btn-sm" onclick="Journal.csv()">Выгрузить в CSV</button></div>
+    </div>
+    <div class="tw" style="max-height:calc(100vh - 300px)">
+      <table class="t"><thead><tr>
+        <th>Дата и время</th><th>Пользователь</th><th>Объект</th><th>Решение</th><th>Комментарий</th>
+      </tr></thead><tbody id="jrBody"></tbody></table>
+    </div>
+    <div style="padding:8px 14px; border-top:1px solid var(--line); font-size:12px; color:var(--muted)" id="jrCount"></div>
+  </div>
+</section>
+
+<!-- ======================= НАСТРОЙКИ ======================= -->
+<section class="page" id="sc-settings">
+  <div class="pt"><h2>Настройки</h2></div>
+  <div class="panel" style="max-width:720px">
+    <div class="ph"><h2>Режим работы</h2></div>
+    <div class="pb">
+      <div style="display:flex; gap:10px; align-items:flex-start">
+        <input type="checkbox" id="setDemo" checked onchange="App.setDemo(this.checked)" style="margin-top:3px">
+        <label for="setDemo" style="font-size:13px">
+          <b style="font-weight:600">Демонстрационный режим</b><br>
+          <span class="mut">Наблюдения по торговым точкам формируются алгоритмически и не являются
+          результатами фактических проверок. Средние цены по регионам при этом остаются данными БНС.
+          В рабочем режиме наблюдения поступают из загрузок районных отделов.</span>
+        </label>
+      </div>
+    </div>
+    <div class="ph" style="border-top:1px solid var(--line)"><h2>Пороговые значения</h2></div>
+    <div class="pb">
+      <dl class="kv" style="grid-template-columns:1fr auto; max-width:520px" id="setThr"></dl>
+      <p class="note">Пороговые значения применяются при отнесении наблюдения к уровню отклонения.
+         Изменение значений доступно администратору системы.</p>
+    </div>
+    <div class="ph" style="border-top:1px solid var(--line)"><h2>Источники данных</h2></div>
+    <div class="pb"><dl class="kv" style="grid-template-columns:1fr auto" id="setSrc"></dl></div>
+  </div>
+</section>
+
+<div class="pagefoot" id="foot">Данные демонстрационные.</div>
+
+</div><!-- /main -->
+</div><!-- /shell -->
+
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+/* =====================================================================
+   БАҒА РАДАР — рабочее место специалиста по мониторингу цен на СЗПТ.
+   Разделы: сигналы, цены, загрузка данных, справочники, отчёты, журнал.
+   ===================================================================== */
+
+/* ------- выгрузка БНС: средние цены и недельные индексы по регионам -------
+   Обновляется скриптом fetch-prices.py (ключ --inject). Правки вручную
+   не вносить: блок переписывается целиком при каждой загрузке выпуска. */
+/*SZPT-DATA-START*/
+const SZPT_DATA = {"source": "Бюро национальной статистики АСПиР РК, форма Ц-101э (еженедельная)", "sourceUrl": "https://stat.gov.kz/ru/industries/economy/prices/spreadsheets/", "published": "2026-11-13", "file": "szpt-2026-11-13.xlsx", "prices": {"astana|rice": 590.0, "almaty_c|rice": 483.0, "shymkent|rice": 554.0, "mangystau|rice": 469.0, "aktobe|rice": 570.0, "atyrau|rice": 582.0, "ulytau|rice": 658.0, "akmola|rice": 597.0, "karaganda|rice": 512.0, "almaty_o|rice": 547.0, "kostanay|rice": 600.0, "kyzylorda|rice": 525.0, "wko|rice": 587.0, "vko|rice": 709.0, "pavlodar|rice": 565.0, "sko|rice": 556.0, "abay|rice": 568.0, "zhetysu|rice": 482.0, "zhambyl|rice": 563.0, "turkestan|rice": 484.0, "astana|buck": 552.0, "almaty_c|buck": 432.0, "shymkent|buck": 535.0, "mangystau|buck": 412.0, "aktobe|buck": 478.0, "atyrau|buck": 465.0, "ulytau|buck": 520.0, "akmola|buck": 412.0, "karaganda|buck": 505.0, "almaty_o|buck": 397.0, "kostanay|buck": 452.0, "kyzylorda|buck": 456.0, "wko|buck": 475.0, "vko|buck": 499.0, "pavlodar|buck": 407.0, "sko|buck": 478.0, "abay|buck": 476.0, "zhetysu|buck": 408.0, "zhambyl|buck": 476.0, "turkestan|buck": 364.0, "astana|flour": 292.0, "almaty_c|flour": 268.0, "shymkent|flour": 200.0, "mangystau|flour": 355.0, "aktobe|flour": 227.0, "atyrau|flour": 283.0, "ulytau|flour": 210.0, "akmola|flour": 212.0, "karaganda|flour": 206.0, "almaty_o|flour": 250.0, "kostanay|flour": 256.0, "kyzylorda|flour": 284.0, "wko|flour": 269.0, "vko|flour": 234.0, "pavlodar|flour": 196.0, "sko|flour": 167.0, "abay|flour": 226.0, "zhetysu|flour": 314.0, "zhambyl|flour": 231.0, "turkestan|flour": 219.0, "astana|bread": 218.0, "almaty_c|bread": 308.0, "shymkent|bread": 194.0, "mangystau|bread": 253.0, "aktobe|bread": 215.0, "atyrau|bread": 210.0, "ulytau|bread": 281.0, "akmola|bread": 231.0, "karaganda|bread": 206.0, "almaty_o|bread": 336.0, "kostanay|bread": 199.0, "kyzylorda|bread": 209.0, "wko|bread": 180.0, "vko|bread": 207.0, "pavlodar|bread": 243.0, "sko|bread": 196.0, "abay|bread": 305.0, "zhetysu|bread": 288.0, "zhambyl|bread": 198.0, "turkestan|bread": 218.0, "astana|pasta": 596.0, "almaty_c|pasta": 536.0, "shymkent|pasta": 471.0, "mangystau|pasta": 636.0, "aktobe|pasta": 558.0, "atyrau|pasta": 405.0, "ulytau|pasta": 678.0, "akmola|pasta": 513.0, "karaganda|pasta": 535.0, "almaty_o|pasta": 504.0, "kostanay|pasta": 500.0, "kyzylorda|pasta": 434.0, "wko|pasta": 449.0, "vko|pasta": 553.0, "pavlodar|pasta": 626.0, "sko|pasta": 524.0, "abay|pasta": 547.0, "zhetysu|pasta": 425.0, "zhambyl|pasta": 548.0, "turkestan|pasta": 496.0, "astana|beef_bone": 3702.0, "almaty_c|beef_bone": 4168.0, "shymkent|beef_bone": 4042.0, "mangystau|beef_bone": 3715.0, "aktobe|beef_bone": 3402.0, "atyrau|beef_bone": 3763.0, "ulytau|beef_bone": 3681.0, "akmola|beef_bone": 3491.0, "karaganda|beef_bone": 3696.0, "almaty_o|beef_bone": 3884.0, "kostanay|beef_bone": 3665.0, "kyzylorda|beef_bone": 3474.0, "wko|beef_bone": 3460.0, "vko|beef_bone": 4150.0, "pavlodar|beef_bone": 3730.0, "sko|beef_bone": 3649.0, "abay|beef_bone": 3816.0, "zhetysu|beef_bone": 4092.0, "zhambyl|beef_bone": 3879.0, "turkestan|beef_bone": 3435.0, "astana|beef": 5887.0, "almaty_c|beef": 5239.0, "shymkent|beef": 5315.0, "mangystau|beef": 4687.0, "aktobe|beef": 4727.0, "atyrau|beef": 4540.0, "ulytau|beef": 4557.0, "akmola|beef": 5173.0, "karaganda|beef": 5271.0, "almaty_o|beef": 5318.0, "kostanay|beef": 4816.0, "kyzylorda|beef": 4555.0, "wko|beef": 4533.0, "vko|beef": 5125.0, "pavlodar|beef": 4407.0, "sko|beef": 5141.0, "abay|beef": 4326.0, "zhetysu|beef": 5122.0, "zhambyl|beef": 4807.0, "turkestan|beef": 4854.0, "astana|horse": 4515.0, "almaty_c|horse": 4899.0, "shymkent|horse": 4345.0, "mangystau|horse": 4753.0, "aktobe|horse": 4464.0, "atyrau|horse": 4122.0, "ulytau|horse": 4225.0, "akmola|horse": 4268.0, "karaganda|horse": 4822.0, "almaty_o|horse": 4332.0, "kostanay|horse": 4430.0, "kyzylorda|horse": 4073.0, "wko|horse": 3996.0, "vko|horse": 4567.0, "pavlodar|horse": 4376.0, "sko|horse": 4732.0, "abay|horse": 4312.0, "zhetysu|horse": 4294.0, "zhambyl|horse": 4270.0, "turkestan|horse": 4070.0, "astana|lamb": 4869.0, "almaty_c|lamb": 5043.0, "shymkent|lamb": 4446.0, "mangystau|lamb": 4405.0, "aktobe|lamb": 4053.0, "atyrau|lamb": 4194.0, "ulytau|lamb": 4370.0, "akmola|lamb": 3666.0, "karaganda|lamb": 4566.0, "almaty_o|lamb": 4313.0, "kostanay|lamb": 4648.0, "kyzylorda|lamb": 4330.0, "wko|lamb": 4107.0, "vko|lamb": 4378.0, "pavlodar|lamb": 4442.0, "sko|lamb": 4312.0, "abay|lamb": 4129.0, "zhetysu|lamb": 4400.0, "zhambyl|lamb": 4463.0, "turkestan|lamb": 4200.0, "astana|chicken": 1954.0, "almaty_c|chicken": 1803.0, "shymkent|chicken": 1824.0, "mangystau|chicken": 1695.0, "aktobe|chicken": 1534.0, "atyrau|chicken": 1655.0, "ulytau|chicken": 1951.0, "akmola|chicken": 1865.0, "karaganda|chicken": 1819.0, "almaty_o|chicken": 1763.0, "kostanay|chicken": 1550.0, "kyzylorda|chicken": 1559.0, "wko|chicken": 1799.0, "vko|chicken": 1772.0, "pavlodar|chicken": 1504.0, "sko|chicken": 1669.0, "abay|chicken": 1469.0, "zhetysu|chicken": 1731.0, "zhambyl|chicken": 1634.0, "turkestan|chicken": 1598.0, "astana|chicken_parts": 1942.0, "almaty_c|chicken_parts": 1780.0, "shymkent|chicken_parts": 1829.0, "mangystau|chicken_parts": 1743.0, "aktobe|chicken_parts": 1747.0, "atyrau|chicken_parts": 1664.0, "ulytau|chicken_parts": 2066.0, "akmola|chicken_parts": 2091.0, "karaganda|chicken_parts": 2110.0, "almaty_o|chicken_parts": 1868.0, "kostanay|chicken_parts": 1501.0, "kyzylorda|chicken_parts": 1648.0, "wko|chicken_parts": 1559.0, "vko|chicken_parts": 1730.0, "pavlodar|chicken_parts": 1669.0, "sko|chicken_parts": 1620.0, "abay|chicken_parts": 1552.0, "zhetysu|chicken_parts": 1896.0, "zhambyl|chicken_parts": 1745.0, "turkestan|chicken_parts": 1534.0, "astana|mince": 5042.0, "almaty_c|mince": 5031.0, "shymkent|mince": 4513.0, "mangystau|mince": 4418.0, "aktobe|mince": 3919.0, "atyrau|mince": 4247.0, "ulytau|mince": 4680.0, "akmola|mince": 4604.0, "karaganda|mince": 3832.0, "almaty_o|mince": 4505.0, "kostanay|mince": 3644.0, "kyzylorda|mince": 4388.0, "wko|mince": 4318.0, "vko|mince": 3776.0, "pavlodar|mince": 4247.0, "sko|mince": 3988.0, "abay|mince": 3402.0, "zhetysu|mince": 4118.0, "zhambyl|mince": 4122.0, "turkestan|mince": 3732.0, "astana|fish": 1467.0, "almaty_c|fish": 2286.0, "shymkent|fish": 1189.0, "mangystau|fish": 1748.0, "aktobe|fish": 1963.0, "atyrau|fish": 1606.0, "ulytau|fish": 2033.0, "akmola|fish": 1235.0, "karaganda|fish": 1529.0, "almaty_o|fish": 2598.0, "kostanay|fish": 1118.0, "kyzylorda|fish": 1785.0, "wko|fish": 1282.0, "vko|fish": 1752.0, "pavlodar|fish": 2079.0, "sko|fish": 1090.0, "abay|fish": 2045.0, "zhetysu|fish": 2445.0, "zhambyl|fish": 1675.0, "turkestan|fish": 1201.0, "astana|milk": 838.0, "almaty_c|milk": 673.0, "shymkent|milk": 673.0, "mangystau|milk": 878.0, "aktobe|milk": 620.0, "atyrau|milk": 864.0, "ulytau|milk": 747.0, "akmola|milk": 554.0, "karaganda|milk": 649.0, "almaty_o|milk": 548.0, "kostanay|milk": 624.0, "kyzylorda|milk": 701.0, "wko|milk": 549.0, "vko|milk": 644.0, "pavlodar|milk": 537.0, "sko|milk": 553.0, "abay|milk": 640.0, "zhetysu|milk": 762.0, "zhambyl|milk": 662.0, "turkestan|milk": 704.0, "astana|cheese": 6770.0, "almaty_c|cheese": 6857.0, "shymkent|cheese": 5487.0, "mangystau|cheese": 5580.0, "aktobe|cheese": 5644.0, "atyrau|cheese": 6642.0, "ulytau|cheese": 5273.0, "akmola|cheese": 6135.0, "karaganda|cheese": 5526.0, "almaty_o|cheese": 5442.0, "kostanay|cheese": 5411.0, "kyzylorda|cheese": 5801.0, "wko|cheese": 6364.0, "vko|cheese": 5429.0, "pavlodar|cheese": 5267.0, "sko|cheese": 6324.0, "abay|cheese": 5434.0, "zhetysu|cheese": 6572.0, "zhambyl|cheese": 6738.0, "turkestan|cheese": 7060.0, "astana|curd": 2807.0, "almaty_c|curd": 2572.0, "shymkent|curd": 2370.0, "mangystau|curd": 2996.0, "aktobe|curd": 2362.0, "atyrau|curd": 2729.0, "ulytau|curd": 3059.0, "akmola|curd": 1943.0, "karaganda|curd": 2528.0, "almaty_o|curd": 3136.0, "kostanay|curd": 2520.0, "kyzylorda|curd": 2203.0, "wko|curd": 2288.0, "vko|curd": 2540.0, "pavlodar|curd": 2483.0, "sko|curd": 1668.0, "abay|curd": 2491.0, "zhetysu|curd": 2215.0, "zhambyl|curd": 2414.0, "turkestan|curd": 2193.0, "astana|smetana": 2254.0, "almaty_c|smetana": 2924.0, "shymkent|smetana": 2249.0, "mangystau|smetana": 1753.0, "aktobe|smetana": 2333.0, "atyrau|smetana": 2975.0, "ulytau|smetana": 2548.0, "akmola|smetana": 1660.0, "karaganda|smetana": 2090.0, "almaty_o|smetana": 2015.0, "kostanay|smetana": 2209.0, "kyzylorda|smetana": 2592.0, "wko|smetana": 2318.0, "vko|smetana": 2882.0, "pavlodar|smetana": 2226.0, "sko|smetana": 1830.0, "abay|smetana": 2478.0, "zhetysu|smetana": 1857.0, "zhambyl|smetana": 2416.0, "turkestan|smetana": 2540.0, "astana|kefir": 601.0, "almaty_c|kefir": 661.0, "shymkent|kefir": 634.0, "mangystau|kefir": 806.0, "aktobe|kefir": 591.0, "atyrau|kefir": 649.0, "ulytau|kefir": 613.0, "akmola|kefir": 490.0, "karaganda|kefir": 524.0, "almaty_o|kefir": 631.0, "kostanay|kefir": 585.0, "kyzylorda|kefir": 609.0, "wko|kefir": 696.0, "vko|kefir": 683.0, "pavlodar|kefir": 473.0, "sko|kefir": 532.0, "abay|kefir": 598.0, "zhetysu|kefir": 454.0, "zhambyl|kefir": 559.0, "turkestan|kefir": 646.0, "astana|eggs": 573.0, "almaty_c|eggs": 700.0, "shymkent|eggs": 553.0, "mangystau|eggs": 613.0, "aktobe|eggs": 520.0, "atyrau|eggs": 590.0, "ulytau|eggs": 601.0, "akmola|eggs": 637.0, "karaganda|eggs": 603.0, "almaty_o|eggs": 656.0, "kostanay|eggs": 610.0, "kyzylorda|eggs": 590.0, "wko|eggs": 588.0, "vko|eggs": 681.0, "pavlodar|eggs": 600.0, "sko|eggs": 567.0, "abay|eggs": 643.0, "zhetysu|eggs": 699.0, "zhambyl|eggs": 564.0, "turkestan|eggs": 560.0, "astana|oil": 916.0, "almaty_c|oil": 920.0, "shymkent|oil": 805.0, "mangystau|oil": 952.0, "aktobe|oil": 882.0, "atyrau|oil": 940.0, "ulytau|oil": 992.0, "akmola|oil": 867.0, "karaganda|oil": 913.0, "almaty_o|oil": 902.0, "kostanay|oil": 889.0, "kyzylorda|oil": 869.0, "wko|oil": 984.0, "vko|oil": 840.0, "pavlodar|oil": 847.0, "sko|oil": 824.0, "abay|oil": 938.0, "zhetysu|oil": 957.0, "zhambyl|oil": 933.0, "turkestan|oil": 825.0, "astana|butter": 6424.0, "almaty_c|butter": 5704.0, "shymkent|butter": 6421.0, "mangystau|butter": 7389.0, "aktobe|butter": 6081.0, "atyrau|butter": 6768.0, "ulytau|butter": 5922.0, "akmola|butter": 4509.0, "karaganda|butter": 5717.0, "almaty_o|butter": 5547.0, "kostanay|butter": 5423.0, "kyzylorda|butter": 6022.0, "wko|butter": 6332.0, "vko|butter": 5532.0, "pavlodar|butter": 5041.0, "sko|butter": 4674.0, "abay|butter": 5010.0, "zhetysu|butter": 5541.0, "zhambyl|butter": 6017.0, "turkestan|butter": 5187.0, "astana|apple": 562.0, "almaty_c|apple": 734.0, "shymkent|apple": 459.0, "mangystau|apple": 764.0, "aktobe|apple": 629.0, "atyrau|apple": 797.0, "ulytau|apple": 847.0, "akmola|apple": 691.0, "karaganda|apple": 788.0, "almaty_o|apple": 660.0, "kostanay|apple": 629.0, "kyzylorda|apple": 659.0, "wko|apple": 672.0, "vko|apple": 718.0, "pavlodar|apple": 739.0, "sko|apple": 784.0, "abay|apple": 853.0, "zhetysu|apple": 578.0, "zhambyl|apple": 584.0, "turkestan|apple": 530.0, "astana|cabbage": 176.0, "almaty_c|cabbage": 161.0, "shymkent|cabbage": 159.0, "mangystau|cabbage": 238.0, "aktobe|cabbage": 189.0, "atyrau|cabbage": 212.0, "ulytau|cabbage": 233.0, "akmola|cabbage": 160.0, "karaganda|cabbage": 170.0, "almaty_o|cabbage": 179.0, "kostanay|cabbage": 184.0, "kyzylorda|cabbage": 187.0, "wko|cabbage": 178.0, "vko|cabbage": 208.0, "pavlodar|cabbage": 168.0, "sko|cabbage": 189.0, "abay|cabbage": 185.0, "zhetysu|cabbage": 170.0, "zhambyl|cabbage": 134.0, "turkestan|cabbage": 137.0, "astana|cucumber": 741.0, "almaty_c|cucumber": 695.0, "shymkent|cucumber": 616.0, "mangystau|cucumber": 573.0, "aktobe|cucumber": 649.0, "atyrau|cucumber": 520.0, "ulytau|cucumber": 818.0, "akmola|cucumber": 665.0, "karaganda|cucumber": 772.0, "almaty_o|cucumber": 661.0, "kostanay|cucumber": 848.0, "kyzylorda|cucumber": 690.0, "wko|cucumber": 600.0, "vko|cucumber": 818.0, "pavlodar|cucumber": 625.0, "sko|cucumber": 748.0, "abay|cucumber": 807.0, "zhetysu|cucumber": 690.0, "zhambyl|cucumber": 567.0, "turkestan|cucumber": 485.0, "astana|tomato": 964.0, "almaty_c|tomato": 774.0, "shymkent|tomato": 505.0, "mangystau|tomato": 870.0, "aktobe|tomato": 782.0, "atyrau|tomato": 535.0, "ulytau|tomato": 764.0, "akmola|tomato": 1122.0, "karaganda|tomato": 1066.0, "almaty_o|tomato": 808.0, "kostanay|tomato": 996.0, "kyzylorda|tomato": 721.0, "wko|tomato": 677.0, "vko|tomato": 905.0, "pavlodar|tomato": 850.0, "sko|tomato": 1092.0, "abay|tomato": 1065.0, "zhetysu|tomato": 689.0, "zhambyl|tomato": 599.0, "turkestan|tomato": 479.0, "astana|onion": 112.0, "almaty_c|onion": 128.0, "shymkent|onion": 119.0, "mangystau|onion": 129.0, "aktobe|onion": 184.0, "atyrau|onion": 144.0, "ulytau|onion": 148.0, "akmola|onion": 114.0, "karaganda|onion": 122.0, "almaty_o|onion": 114.0, "kostanay|onion": 140.0, "kyzylorda|onion": 118.0, "wko|onion": 133.0, "vko|onion": 144.0, "pavlodar|onion": 116.0, "sko|onion": 136.0, "abay|onion": 156.0, "zhetysu|onion": 98.0, "zhambyl|onion": 101.0, "turkestan|onion": 113.0, "astana|carrot": 183.0, "almaty_c|carrot": 217.0, "shymkent|carrot": 209.0, "mangystau|carrot": 240.0, "aktobe|carrot": 251.0, "atyrau|carrot": 229.0, "ulytau|carrot": 216.0, "akmola|carrot": 152.0, "karaganda|carrot": 185.0, "almaty_o|carrot": 217.0, "kostanay|carrot": 203.0, "kyzylorda|carrot": 207.0, "wko|carrot": 213.0, "vko|carrot": 202.0, "pavlodar|carrot": 133.0, "sko|carrot": 233.0, "abay|carrot": 184.0, "zhetysu|carrot": 205.0, "zhambyl|carrot": 210.0, "turkestan|carrot": 190.0, "astana|potato": 203.0, "almaty_c|potato": 228.0, "shymkent|potato": 228.0, "mangystau|potato": 230.0, "aktobe|potato": 252.0, "atyrau|potato": 248.0, "ulytau|potato": 214.0, "akmola|potato": 184.0, "karaganda|potato": 192.0, "almaty_o|potato": 227.0, "kostanay|potato": 188.0, "kyzylorda|potato": 233.0, "wko|potato": 195.0, "vko|potato": 214.0, "pavlodar|potato": 146.0, "sko|potato": 216.0, "abay|potato": 202.0, "zhetysu|potato": 216.0, "zhambyl|potato": 199.0, "turkestan|potato": 200.0, "astana|sugar": 419.0, "almaty_c|sugar": 400.0, "shymkent|sugar": 413.0, "mangystau|sugar": 403.0, "aktobe|sugar": 337.0, "atyrau|sugar": 370.0, "ulytau|sugar": 435.0, "akmola|sugar": 414.0, "karaganda|sugar": 366.0, "almaty_o|sugar": 408.0, "kostanay|sugar": 347.0, "kyzylorda|sugar": 391.0, "wko|sugar": 358.0, "vko|sugar": 431.0, "pavlodar|sugar": 387.0, "sko|sugar": 442.0, "abay|sugar": 439.0, "zhetysu|sugar": 392.0, "zhambyl|sugar": 364.0, "turkestan|sugar": 381.0, "astana|salt": 97.0, "almaty_c|salt": 133.0, "shymkent|salt": 87.0, "mangystau|salt": 98.0, "aktobe|salt": 81.0, "atyrau|salt": 106.0, "ulytau|salt": 90.0, "akmola|salt": 121.0, "karaganda|salt": 99.0, "almaty_o|salt": 112.0, "kostanay|salt": 91.0, "kyzylorda|salt": 85.0, "wko|salt": 73.0, "vko|salt": 110.0, "pavlodar|salt": 104.0, "sko|salt": 68.0, "abay|salt": 109.0, "zhetysu|salt": 118.0, "zhambyl|salt": 108.0, "turkestan|salt": 79.0, "astana|tea": 5810.0, "almaty_c|tea": 5970.0, "shymkent|tea": 7163.0, "mangystau|tea": 5798.0, "aktobe|tea": 6016.0, "atyrau|tea": 6069.0, "ulytau|tea": 5731.0, "akmola|tea": 5587.0, "karaganda|tea": 6808.0, "almaty_o|tea": 6097.0, "kostanay|tea": 6000.0, "kyzylorda|tea": 6270.0, "wko|tea": 5670.0, "vko|tea": 6111.0, "pavlodar|tea": 5413.0, "sko|tea": 6183.0, "abay|tea": 5615.0, "zhetysu|tea": 5747.0, "zhambyl|tea": 6094.0, "turkestan|tea": 6302.0}, "national": {"rice": 542.0, "buck": 451.0, "flour": 252.0, "bread": 232.0, "pasta": 522.0, "beef_bone": 3808.0, "beef": 5029.0, "horse": 4337.0, "lamb": 4461.0, "chicken": 1746.0, "chicken_parts": 1778.0, "mince": 4336.0, "fish": 1722.0, "milk": 674.0, "cheese": 6162.0, "curd": 2532.0, "smetana": 2379.0, "kefir": 614.0, "eggs": 613.0, "oil": 894.0, "butter": 5697.0, "apple": 668.0, "cabbage": 172.0, "cucumber": 671.0, "tomato": 781.0, "onion": 124.0, "carrot": 205.0, "potato": 213.0, "sugar": 391.0, "salt": 103.0, "tea": 6050.0}, "wow": {"astana|rice": 0.0, "almaty_c|rice": 0.4, "shymkent|rice": 0.0, "mangystau|rice": 0.0, "aktobe|rice": 1.2, "atyrau|rice": 0.0, "ulytau|rice": 0.0, "akmola|rice": -0.5, "karaganda|rice": 0.6, "almaty_o|rice": 0.0, "kostanay|rice": 1.9, "kyzylorda|rice": 1.7, "wko|rice": 1.4, "vko|rice": 0.0, "pavlodar|rice": 0.0, "sko|rice": 0.0, "abay|rice": 0.0, "zhetysu|rice": 0.0, "zhambyl|rice": -1.4, "turkestan|rice": 0.0, "astana|buck": 0.0, "almaty_c|buck": 0.0, "shymkent|buck": 0.0, "mangystau|buck": -1.0, "aktobe|buck": 3.0, "atyrau|buck": 0.6, "ulytau|buck": 0.0, "akmola|buck": -0.5, "karaganda|buck": 0.0, "almaty_o|buck": 2.1, "kostanay|buck": 0.0, "kyzylorda|buck": 0.0, "wko|buck": 2.4, "vko|buck": 0.0, "pavlodar|buck": 0.0, "sko|buck": 0.0, "abay|buck": 0.0, "zhetysu|buck": 0.0, "zhambyl|buck": 3.5, "turkestan|buck": 0.0, "astana|flour": -3.6, "almaty_c|flour": 0.0, "shymkent|flour": 0.0, "mangystau|flour": 0.0, "aktobe|flour": 0.0, "atyrau|flour": 0.0, "ulytau|flour": 0.0, "akmola|flour": 0.0, "karaganda|flour": 0.0, "almaty_o|flour": 0.0, "kostanay|flour": -6.6, "kyzylorda|flour": 0.4, "wko|flour": 0.0, "vko|flour": 0.0, "pavlodar|flour": 0.0, "sko|flour": 0.0, "abay|flour": 0.0, "zhetysu|flour": 0.0, "zhambyl|flour": 0.0, "turkestan|flour": 0.0, "astana|bread": 0.0, "almaty_c|bread": 0.0, "shymkent|bread": 0.0, "mangystau|bread": 0.0, "aktobe|bread": 0.0, "atyrau|bread": 0.0, "ulytau|bread": 0.0, "akmola|bread": 0.0, "karaganda|bread": 0.0, "almaty_o|bread": 0.0, "kostanay|bread": 0.0, "kyzylorda|bread": 0.0, "wko|bread": 0.0, "vko|bread": 0.0, "pavlodar|bread": 0.0, "sko|bread": 0.0, "abay|bread": 0.0, "zhetysu|bread": 0.0, "zhambyl|bread": 0.0, "turkestan|bread": 0.0, "astana|pasta": -0.7, "almaty_c|pasta": 0.0, "shymkent|pasta": 0.0, "mangystau|pasta": -0.8, "aktobe|pasta": 0.0, "atyrau|pasta": 0.0, "ulytau|pasta": 0.0, "akmola|pasta": 0.0, "karaganda|pasta": 0.0, "almaty_o|pasta": 0.0, "kostanay|pasta": 0.0, "kyzylorda|pasta": -0.2, "wko|pasta": 0.0, "vko|pasta": 0.0, "pavlodar|pasta": 0.0, "sko|pasta": 0.0, "abay|pasta": 0.0, "zhetysu|pasta": 0.0, "zhambyl|pasta": 0.0, "turkestan|pasta": 0.0, "astana|beef_bone": 0.0, "almaty_c|beef_bone": 0.0, "shymkent|beef_bone": 0.1, "mangystau|beef_bone": 0.0, "aktobe|beef_bone": 0.0, "atyrau|beef_bone": 0.0, "ulytau|beef_bone": 0.0, "akmola|beef_bone": 0.0, "karaganda|beef_bone": 0.0, "almaty_o|beef_bone": 0.0, "kostanay|beef_bone": 0.0, "kyzylorda|beef_bone": 0.0, "wko|beef_bone": 0.0, "vko|beef_bone": 0.0, "pavlodar|beef_bone": 0.0, "sko|beef_bone": 0.0, "abay|beef_bone": 0.0, "zhetysu|beef_bone": 0.0, "zhambyl|beef_bone": 0.0, "turkestan|beef_bone": 0.0, "astana|beef": 0.0, "almaty_c|beef": 0.1, "shymkent|beef": 0.0, "mangystau|beef": 0.0, "aktobe|beef": 0.0, "atyrau|beef": 0.0, "ulytau|beef": 0.0, "akmola|beef": 0.0, "karaganda|beef": 0.0, "almaty_o|beef": 0.0, "kostanay|beef": 0.0, "kyzylorda|beef": 0.0, "wko|beef": 0.0, "vko|beef": 0.0, "pavlodar|beef": 0.0, "sko|beef": 0.0, "abay|beef": 0.0, "zhetysu|beef": 0.0, "zhambyl|beef": 0.4, "turkestan|beef": 0.0, "astana|horse": 0.0, "almaty_c|horse": 0.0, "shymkent|horse": 0.0, "mangystau|horse": 0.3, "aktobe|horse": 0.0, "atyrau|horse": 0.0, "ulytau|horse": 0.0, "akmola|horse": 0.0, "karaganda|horse": 0.0, "almaty_o|horse": 0.0, "kostanay|horse": 0.0, "kyzylorda|horse": 0.0, "wko|horse": 0.0, "vko|horse": 0.0, "pavlodar|horse": 0.0, "sko|horse": 0.0, "abay|horse": 0.0, "zhetysu|horse": 0.0, "zhambyl|horse": 0.0, "turkestan|horse": 0.0, "astana|lamb": 0.0, "almaty_c|lamb": 0.0, "shymkent|lamb": 0.0, "mangystau|lamb": -0.4, "aktobe|lamb": 0.0, "atyrau|lamb": 0.0, "ulytau|lamb": 0.0, "akmola|lamb": 0.0, "karaganda|lamb": 0.0, "almaty_o|lamb": 0.0, "kostanay|lamb": 0.0, "kyzylorda|lamb": 0.0, "wko|lamb": 0.0, "vko|lamb": 0.0, "pavlodar|lamb": 0.0, "sko|lamb": -3.4, "abay|lamb": 0.0, "zhetysu|lamb": 0.0, "zhambyl|lamb": 0.0, "turkestan|lamb": 0.0, "astana|chicken": 0.0, "almaty_c|chicken": 0.0, "shymkent|chicken": -2.9, "mangystau|chicken": 0.1, "aktobe|chicken": 0.7, "atyrau|chicken": 0.1, "ulytau|chicken": 0.0, "akmola|chicken": 1.0, "karaganda|chicken": 0.0, "almaty_o|chicken": -0.1, "kostanay|chicken": 0.0, "kyzylorda|chicken": -0.8, "wko|chicken": 0.0, "vko|chicken": 0.0, "pavlodar|chicken": 0.0, "sko|chicken": 0.0, "abay|chicken": 0.0, "zhetysu|chicken": 0.1, "zhambyl|chicken": 0.0, "turkestan|chicken": 0.0, "astana|chicken_parts": 0.0, "almaty_c|chicken_parts": 0.6, "shymkent|chicken_parts": 2.3, "mangystau|chicken_parts": 0.0, "aktobe|chicken_parts": 0.0, "atyrau|chicken_parts": 0.0, "ulytau|chicken_parts": 0.0, "akmola|chicken_parts": -2.1, "karaganda|chicken_parts": 0.0, "almaty_o|chicken_parts": 2.4, "kostanay|chicken_parts": -2.1, "kyzylorda|chicken_parts": -1.4, "wko|chicken_parts": 0.0, "vko|chicken_parts": -0.6, "pavlodar|chicken_parts": 0.0, "sko|chicken_parts": 0.0, "abay|chicken_parts": 0.0, "zhetysu|chicken_parts": 0.3, "zhambyl|chicken_parts": 1.6, "turkestan|chicken_parts": 0.0, "astana|mince": 0.0, "almaty_c|mince": 0.0, "shymkent|mince": 0.0, "mangystau|mince": 0.0, "aktobe|mince": 0.0, "atyrau|mince": 0.0, "ulytau|mince": 0.0, "akmola|mince": 0.0, "karaganda|mince": 0.0, "almaty_o|mince": 0.0, "kostanay|mince": 0.0, "kyzylorda|mince": 0.0, "wko|mince": 0.0, "vko|mince": 0.0, "pavlodar|mince": 0.0, "sko|mince": -0.8, "abay|mince": 0.0, "zhetysu|mince": 0.0, "zhambyl|mince": 0.0, "turkestan|mince": 0.0, "astana|fish": -0.7, "almaty_c|fish": 0.0, "shymkent|fish": -2.9, "mangystau|fish": 0.0, "aktobe|fish": 0.0, "atyrau|fish": 0.0, "ulytau|fish": 0.0, "akmola|fish": -16.3, "karaganda|fish": 0.0, "almaty_o|fish": -1.8, "kostanay|fish": 0.0, "kyzylorda|fish": 0.0, "wko|fish": 0.0, "vko|fish": 0.0, "pavlodar|fish": 0.0, "sko|fish": 0.0, "abay|fish": 0.0, "zhetysu|fish": 0.0, "zhambyl|fish": 0.0, "turkestan|fish": 0.0, "astana|milk": 0.0, "almaty_c|milk": 0.4, "shymkent|milk": -2.0, "mangystau|milk": 0.0, "aktobe|milk": 1.6, "atyrau|milk": 0.0, "ulytau|milk": 0.0, "akmola|milk": 0.0, "karaganda|milk": 0.8, "almaty_o|milk": 0.0, "kostanay|milk": 0.0, "kyzylorda|milk": 0.0, "wko|milk": 0.0, "vko|milk": 0.0, "pavlodar|milk": 0.0, "sko|milk": 0.0, "abay|milk": 0.0, "zhetysu|milk": 0.0, "zhambyl|milk": 1.5, "turkestan|milk": 0.0, "astana|cheese": 0.0, "almaty_c|cheese": 0.0, "shymkent|cheese": 1.5, "mangystau|cheese": -3.5, "aktobe|cheese": 1.1, "atyrau|cheese": 0.0, "ulytau|cheese": 0.0, "akmola|cheese": 0.0, "karaganda|cheese": 0.0, "almaty_o|cheese": -2.2, "kostanay|cheese": 0.0, "kyzylorda|cheese": -5.8, "wko|cheese": 0.0, "vko|cheese": 0.0, "pavlodar|cheese": 0.0, "sko|cheese": 0.0, "abay|cheese": 0.0, "zhetysu|cheese": 0.0, "zhambyl|cheese": 0.0, "turkestan|cheese": 0.0, "astana|curd": 0.0, "almaty_c|curd": 0.0, "shymkent|curd": 0.0, "mangystau|curd": 0.0, "aktobe|curd": 0.0, "atyrau|curd": 0.0, "ulytau|curd": 0.0, "akmola|curd": 0.0, "karaganda|curd": 0.1, "almaty_o|curd": 0.0, "kostanay|curd": 0.0, "kyzylorda|curd": 0.0, "wko|curd": 0.0, "vko|curd": 0.0, "pavlodar|curd": 0.0, "sko|curd": 0.4, "abay|curd": 0.9, "zhetysu|curd": 0.0, "zhambyl|curd": 0.0, "turkestan|curd": 0.0, "astana|smetana": 0.0, "almaty_c|smetana": 0.0, "shymkent|smetana": 0.0, "mangystau|smetana": 0.0, "aktobe|smetana": 0.0, "atyrau|smetana": 0.0, "ulytau|smetana": 0.0, "akmola|smetana": 0.0, "karaganda|smetana": 0.0, "almaty_o|smetana": 0.0, "kostanay|smetana": 0.0, "kyzylorda|smetana": 0.0, "wko|smetana": 0.0, "vko|smetana": 0.0, "pavlodar|smetana": 0.0, "sko|smetana": 0.0, "abay|smetana": 0.2, "zhetysu|smetana": 0.0, "zhambyl|smetana": 0.0, "turkestan|smetana": 0.0, "astana|kefir": 0.0, "almaty_c|kefir": 0.0, "shymkent|kefir": 0.0, "mangystau|kefir": 0.0, "aktobe|kefir": 0.0, "atyrau|kefir": 0.0, "ulytau|kefir": 0.0, "akmola|kefir": 0.0, "karaganda|kefir": 0.0, "almaty_o|kefir": 0.0, "kostanay|kefir": 0.0, "kyzylorda|kefir": 0.5, "wko|kefir": 0.0, "vko|kefir": 0.0, "pavlodar|kefir": 0.0, "sko|kefir": 0.0, "abay|kefir": 0.0, "zhetysu|kefir": 0.0, "zhambyl|kefir": 0.0, "turkestan|kefir": 0.0, "astana|eggs": 0.0, "almaty_c|eggs": 1.6, "shymkent|eggs": 0.0, "mangystau|eggs": 0.0, "aktobe|eggs": 0.6, "atyrau|eggs": 1.2, "ulytau|eggs": 0.0, "akmola|eggs": 0.0, "karaganda|eggs": 0.0, "almaty_o|eggs": 0.0, "kostanay|eggs": 0.0, "kyzylorda|eggs": -0.5, "wko|eggs": 2.3, "vko|eggs": 0.0, "pavlodar|eggs": 0.0, "sko|eggs": 0.4, "abay|eggs": 0.0, "zhetysu|eggs": -0.1, "zhambyl|eggs": -1.1, "turkestan|eggs": 0.0, "astana|oil": 0.0, "almaty_c|oil": -1.5, "shymkent|oil": -2.2, "mangystau|oil": 0.0, "aktobe|oil": 0.0, "atyrau|oil": -1.3, "ulytau|oil": -2.4, "akmola|oil": -1.7, "karaganda|oil": -0.1, "almaty_o|oil": -1.3, "kostanay|oil": -1.4, "kyzylorda|oil": 0.0, "wko|oil": -1.5, "vko|oil": 0.0, "pavlodar|oil": 0.0, "sko|oil": 0.0, "abay|oil": 0.0, "zhetysu|oil": 0.1, "zhambyl|oil": 0.0, "turkestan|oil": 0.0, "astana|butter": 0.0, "almaty_c|butter": 0.0, "shymkent|butter": -0.8, "mangystau|butter": 0.0, "aktobe|butter": 0.0, "atyrau|butter": 0.0, "ulytau|butter": 0.0, "akmola|butter": -0.4, "karaganda|butter": 0.0, "almaty_o|butter": 0.0, "kostanay|butter": 0.0, "kyzylorda|butter": 0.0, "wko|butter": 0.0, "vko|butter": 0.0, "pavlodar|butter": 0.0, "sko|butter": 0.0, "abay|butter": 0.0, "zhetysu|butter": 0.0, "zhambyl|butter": 0.0, "turkestan|butter": 0.0, "astana|apple": -1.7, "almaty_c|apple": 0.0, "shymkent|apple": 1.8, "mangystau|apple": 3.7, "aktobe|apple": -3.4, "atyrau|apple": 0.3, "ulytau|apple": 0.0, "akmola|apple": 5.8, "karaganda|apple": -0.5, "almaty_o|apple": 3.9, "kostanay|apple": -3.1, "kyzylorda|apple": 0.0, "wko|apple": 0.0, "vko|apple": -1.5, "pavlodar|apple": -1.6, "sko|apple": 1.7, "abay|apple": 0.0, "zhetysu|apple": -1.9, "zhambyl|apple": 0.0, "turkestan|apple": 0.6, "astana|cabbage": 2.3, "almaty_c|cabbage": 0.0, "shymkent|cabbage": -0.6, "mangystau|cabbage": 1.3, "aktobe|cabbage": 0.0, "atyrau|cabbage": 1.4, "ulytau|cabbage": 3.1, "akmola|cabbage": -1.8, "karaganda|cabbage": -0.6, "almaty_o|cabbage": 2.9, "kostanay|cabbage": -5.2, "kyzylorda|cabbage": -0.5, "wko|cabbage": 0.0, "vko|cabbage": 0.0, "pavlodar|cabbage": 0.6, "sko|cabbage": -7.4, "abay|cabbage": -1.6, "zhetysu|cabbage": -0.6, "zhambyl|cabbage": 0.0, "turkestan|cabbage": -0.7, "astana|cucumber": 5.6, "almaty_c|cucumber": -2.4, "shymkent|cucumber": 4.6, "mangystau|cucumber": 41.8, "aktobe|cucumber": 2.4, "atyrau|cucumber": 4.0, "ulytau|cucumber": 5.4, "akmola|cucumber": 1.4, "karaganda|cucumber": 8.0, "almaty_o|cucumber": 8.7, "kostanay|cucumber": 11.6, "kyzylorda|cucumber": 7.5, "wko|cucumber": 5.3, "vko|cucumber": 2.8, "pavlodar|cucumber": 1.1, "sko|cucumber": 4.5, "abay|cucumber": 0.0, "zhetysu|cucumber": 9.9, "zhambyl|cucumber": 3.1, "turkestan|cucumber": 1.0, "astana|tomato": 1.7, "almaty_c|tomato": -0.9, "shymkent|tomato": 2.9, "mangystau|tomato": 10.3, "aktobe|tomato": 2.2, "atyrau|tomato": 1.7, "ulytau|tomato": 4.2, "akmola|tomato": 14.7, "karaganda|tomato": 0.2, "almaty_o|tomato": 7.2, "kostanay|tomato": 6.9, "kyzylorda|tomato": -1.2, "wko|tomato": 5.3, "vko|tomato": 0.0, "pavlodar|tomato": 1.6, "sko|tomato": 3.6, "abay|tomato": 0.0, "zhetysu|tomato": -2.1, "zhambyl|tomato": 8.1, "turkestan|tomato": 3.0, "astana|onion": 2.8, "almaty_c|onion": 0.0, "shymkent|onion": 0.0, "mangystau|onion": 4.9, "aktobe|onion": 0.0, "atyrau|onion": -2.7, "ulytau|onion": 1.4, "akmola|onion": 7.5, "karaganda|onion": -2.4, "almaty_o|onion": -1.7, "kostanay|onion": 7.7, "kyzylorda|onion": 1.7, "wko|onion": 0.0, "vko|onion": 0.0, "pavlodar|onion": 4.5, "sko|onion": -4.2, "abay|onion": 0.0, "zhetysu|onion": 2.1, "zhambyl|onion": 0.0, "turkestan|onion": 0.0, "astana|carrot": 0.5, "almaty_c|carrot": 0.0, "shymkent|carrot": -0.5, "mangystau|carrot": 3.9, "aktobe|carrot": 0.0, "atyrau|carrot": -0.4, "ulytau|carrot": 0.5, "akmola|carrot": -0.7, "karaganda|carrot": -2.6, "almaty_o|carrot": -1.4, "kostanay|carrot": -5.1, "kyzylorda|carrot": -8.4, "wko|carrot": 0.0, "vko|carrot": 0.0, "pavlodar|carrot": 0.0, "sko|carrot": 0.0, "abay|carrot": -1.6, "zhetysu|carrot": -3.3, "zhambyl|carrot": -3.7, "turkestan|carrot": -0.5, "astana|potato": 1.5, "almaty_c|potato": 0.0, "shymkent|potato": 0.4, "mangystau|potato": 2.7, "aktobe|potato": 0.0, "atyrau|potato": 1.6, "ulytau|potato": 1.4, "akmola|potato": 0.0, "karaganda|potato": -4.0, "almaty_o|potato": -0.9, "kostanay|potato": 0.0, "kyzylorda|potato": 3.1, "wko|potato": 0.0, "vko|potato": 3.9, "pavlodar|potato": 0.7, "sko|potato": 1.9, "abay|potato": 0.0, "zhetysu|potato": 2.4, "zhambyl|potato": 1.5, "turkestan|potato": 1.0, "astana|sugar": 0.0, "almaty_c|sugar": -5.4, "shymkent|sugar": 0.0, "mangystau|sugar": -3.1, "aktobe|sugar": -2.6, "atyrau|sugar": -1.3, "ulytau|sugar": -1.4, "akmola|sugar": -0.5, "karaganda|sugar": 0.0, "almaty_o|sugar": 0.0, "kostanay|sugar": 0.6, "kyzylorda|sugar": -0.8, "wko|sugar": -2.5, "vko|sugar": -0.7, "pavlodar|sugar": 0.0, "sko|sugar": 0.0, "abay|sugar": 0.0, "zhetysu|sugar": -2.5, "zhambyl|sugar": -1.6, "turkestan|sugar": -2.6, "astana|salt": 0.0, "almaty_c|salt": 3.1, "shymkent|salt": 0.0, "mangystau|salt": 0.0, "aktobe|salt": 0.0, "atyrau|salt": 0.0, "ulytau|salt": 0.0, "akmola|salt": 2.5, "karaganda|salt": 2.1, "almaty_o|salt": 0.0, "kostanay|salt": 0.0, "kyzylorda|salt": 0.0, "wko|salt": 0.0, "vko|salt": 0.0, "pavlodar|salt": 0.0, "sko|salt": 0.0, "abay|salt": 0.0, "zhetysu|salt": 0.0, "zhambyl|salt": 0.0, "turkestan|salt": 0.0, "astana|tea": 0.0, "almaty_c|tea": 0.0, "shymkent|tea": 0.0, "mangystau|tea": 0.0, "aktobe|tea": 0.0, "atyrau|tea": 0.0, "ulytau|tea": -2.7, "akmola|tea": 0.0, "karaganda|tea": 0.0, "almaty_o|tea": -1.2, "kostanay|tea": 0.0, "kyzylorda|tea": 2.4, "wko|tea": 0.0, "vko|tea": 0.0, "pavlodar|tea": 0.0, "sko|tea": 0.0, "abay|tea": 0.0, "zhetysu|tea": 0.0, "zhambyl|tea": 0.0, "turkestan|tea": 0.0}, "products": {"rice": "Рис шлифованный", "buck": "Крупа гречневая", "flour": "Мука пшеничная первого сорта", "bread": "Хлеб пшеничный из муки первого сорта", "pasta": "Рожки", "beef_bone": "Говядина с костями", "beef": "Говядина бескостная", "horse": "Конина, включая бескостную", "lamb": "Баранина, включая бескостную", "chicken": "Куры", "chicken_parts": "Мясо кур (бедро, голень, окорочка куриные)", "mince": "Мясной фарш", "fish": "Рыба свежая, охлажденная, мороженая (лещ, карась, судак, карп, сазан)", "milk": "Молоко (пастеризованное, ультрапастеризованное, стерилизованное от 2,2% до 6% жирности), литр", "cheese": "Сыр твердый, полутвердый", "curd": "Творог 5-9% жирности", "smetana": "Сметана", "kefir": "Кефир 2-3% жирности, литр", "eggs": "Яйца, 1 категории, десяток", "oil": "Масло подсолнечное, литр", "butter": "Масло сливочное", "apple": "Яблоки", "cabbage": "Капуста белокочанная", "cucumber": "Огурцы", "tomato": "Помидоры", "onion": "Лук репчатый", "carrot": "Морковь", "potato": "Картофель", "sugar": "Сахар-песок", "salt": "Соль, кроме экстра", "tea": "Чай черный"}, "units": {"rice": "₸/кг", "buck": "₸/кг", "flour": "₸/кг", "bread": "₸/кг", "pasta": "₸/кг", "beef_bone": "₸/кг", "beef": "₸/кг", "horse": "₸/кг", "lamb": "₸/кг", "chicken": "₸/кг", "chicken_parts": "₸/кг", "mince": "₸/кг", "fish": "₸/кг", "milk": "₸/л", "cheese": "₸/кг", "curd": "₸/кг", "smetana": "₸/кг", "kefir": "₸/л", "eggs": "₸/10 шт", "oil": "₸/л", "butter": "₸/кг", "apple": "₸/кг", "cabbage": "₸/кг", "cucumber": "₸/кг", "tomato": "₸/кг", "onion": "₸/кг", "carrot": "₸/кг", "potato": "₸/кг", "sugar": "₸/кг", "salt": "₸/кг", "tea": "₸/кг"}, "order": ["rice", "buck", "flour", "bread", "pasta", "beef_bone", "beef", "horse", "lamb", "chicken", "chicken_parts", "mince", "fish", "milk", "cheese", "curd", "smetana", "kefir", "eggs", "oil", "butter", "apple", "cabbage", "cucumber", "tomato", "onion", "carrot", "potato", "sugar", "salt", "tea"], "cities": {"astana": "Астана", "almaty_c": "Алматы", "shymkent": "Шымкент", "mangystau": "Актау", "aktobe": "Актобе", "atyrau": "Атырау", "ulytau": "Жезказган", "akmola": "Кокшетау", "karaganda": "Караганда", "almaty_o": "Конаев", "kostanay": "Костанай", "kyzylorda": "Кызылорда", "wko": "Уральск", "vko": "Усть-Каменогорск", "pavlodar": "Павлодар", "sko": "Петропавловск", "abay": "Семей", "zhetysu": "Талдыкорган", "zhambyl": "Тараз", "turkestan": "Туркестан"}, "fx": {"date": "14.11.2026", "rates": [{"code": "USD", "v": 444.3, "change": 0.68, "dir": "UP"}, {"code": "EUR", "v": 490.91, "change": -1.33, "dir": "DOWN"}, {"code": "RUB", "v": 5.41, "change": 0.05, "dir": "UP"}, {"code": "CNY", "v": 66.59, "change": 0.06, "dir": "UP"}], "source": "Национальный Банк Республики Казахстан", "sourceUrl": "https://nationalbank.kz/ru/exchangerates/ezhednevnye-oficialnye-rynochnye-kursy-valyut"}, "archive": ["szpt-2026-11-13.xlsx"]};
+/*SZPT-DATA-END*/
+
+/* ===================== пороговые значения ===================== */
+const CONFIG = {
+  devHigh : 15,   // отклонение от медианы района, % → уровень «Высокий»
+  devMid  : 8,    //                                  → «Средний»
+  wowHigh : 8,    // изменение к предыдущей неделе, % → «Высокий»
+  wowMid  : 4,    //                                  → «Средний»
+  queueDev: 5,    // наблюдение попадает в очередь при отклонении от, %
+  queueWow: 3,    // либо при изменении за неделю от, %
+  markup  : 15    // предельная торговая надбавка, % (постановление)
+};
+
+/* ===================== утилиты ===================== */
+const U = {
+  hash(s){ let h=2166136261; for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619);} return h>>>0; },
+  rng(seed){ let a=U.hash(String(seed));
+    const f=function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a);
+      t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; };
+    f();f();f();f(); return f; },                    // прогрев: близкие seed иначе коррелируют
+  n(v,d){ return new Intl.NumberFormat('ru-RU',{minimumFractionDigits:d||0,maximumFractionDigits:d||0})
+            .format(v).replace('-','−'); },
+  n1(v){ return U.n(v,1); },
+  sign(v,d){ return (v>0?'+':v<0?'−':'')+U.n(Math.abs(v),d===undefined?1:d); },
+  med(a){ const s=[...a].sort((x,y)=>x-y), n=s.length; if(!n) return 0;
+    return n%2 ? s[(n-1)/2] : (s[n/2-1]+s[n/2])/2; },
+  esc(s){ return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); },
+  el(id){ return document.getElementById(id); },
+  pad(n){ return String(n).padStart(2,'0'); },
+  d(dt){ return U.pad(dt.getDate())+'.'+U.pad(dt.getMonth()+1)+'.'+dt.getFullYear(); },
+  dt(dt){ return U.d(dt)+' '+U.pad(dt.getHours())+':'+U.pad(dt.getMinutes()); }
+};
+
+/* ===================== регионы ===================== */
+const REGIONS = [
+  {id:'abay',      n:'Абайская область',             c:'Семей'},
+  {id:'akmola',    n:'Акмолинская область',          c:'Кокшетау'},
+  {id:'aktobe',    n:'Актюбинская область',          c:'Актобе'},
+  {id:'almaty_o',  n:'Алматинская область',          c:'Конаев'},
+  {id:'atyrau',    n:'Атырауская область',           c:'Атырау'},
+  {id:'vko',       n:'Восточно-Казахстанская область',c:'Усть-Каменогорск'},
+  {id:'zhambyl',   n:'Жамбылская область',           c:'Тараз'},
+  {id:'zhetysu',   n:'Жетысуская область',           c:'Талдыкорган'},
+  {id:'wko',       n:'Западно-Казахстанская область',c:'Уральск'},
+  {id:'karaganda', n:'Карагандинская область',       c:'Караганда'},
+  {id:'kostanay',  n:'Костанайская область',         c:'Костанай'},
+  {id:'kyzylorda', n:'Кызылординская область',       c:'Кызылорда'},
+  {id:'mangystau', n:'Мангистауская область',        c:'Актау'},
+  {id:'pavlodar',  n:'Павлодарская область',         c:'Павлодар'},
+  {id:'sko',       n:'Северо-Казахстанская область', c:'Петропавловск'},
+  {id:'turkestan', n:'Туркестанская область',        c:'Туркестан'},
+  {id:'ulytau',    n:'Улытауская область',           c:'Жезказган'},
+  {id:'astana',    n:'город Астана',                 c:'Астана'},
+  {id:'almaty_c',  n:'город Алматы',                 c:'Алматы'},
+  {id:'shymkent',  n:'город Шымкент',                c:'Шымкент'}
+];
+const R_BY={}; REGIONS.forEach(r=>R_BY[r.id]=r);
+/* положение области в схеме расположения: столбец и строка сетки 7×5 */
+const GRID={wko:[1,2],atyrau:[1,3],mangystau:[1,4],aktobe:[2,3],kostanay:[3,1],sko:[4,1],
+  pavlodar:[6,1],akmola:[4,2],astana:[5,2],vko:[7,2],ulytau:[3,3],karaganda:[4,3],abay:[6,3],
+  kyzylorda:[2,4],turkestan:[3,5],shymkent:[4,5],zhambyl:[5,4],almaty_o:[6,4],zhetysu:[7,4],
+  almaty_c:[6,5]};
+/* короткие наименования для схемы */
+const R_SHORT={wko:'ЗКО',atyrau:'Атырауская',mangystau:'Мангистауская',aktobe:'Актюбинская',
+  kostanay:'Костанайская',sko:'СКО',pavlodar:'Павлодарская',akmola:'Акмолинская',astana:'Астана',
+  vko:'ВКО',ulytau:'Улытауская',karaganda:'Карагандинская',abay:'Абайская',kyzylorda:'Кызылординская',
+  turkestan:'Туркестанская',shymkent:'Шымкент',zhambyl:'Жамбылская',almaty_o:'Алматинская',
+  zhetysu:'Жетысуская',almaty_c:'Алматы'};
+
+/* ----- районы региона наблюдения (Кызылординская область) -----
+   k — коэффициент удалённости: транспортная составляющая в цене  */
+const DISTRICTS = [
+  {id:'kzo-city', n:'город Кызылорда',      k:0.985, pts:12},
+  {id:'kzo-ara',  n:'Аральский район',      k:1.072, pts:5},
+  {id:'kzo-kaz',  n:'Казалинский район',    k:1.054, pts:5},
+  {id:'kzo-kar',  n:'Кармакшинский район',  k:1.046, pts:5},
+  {id:'kzo-zha',  n:'Жалагашский район',    k:1.031, pts:4},
+  {id:'kzo-syr',  n:'Сырдарьинский район',  k:1.022, pts:4},
+  {id:'kzo-shi',  n:'Шиелийский район',     k:1.035, pts:6},
+  {id:'kzo-zhk',  n:'Жанакорганский район', k:1.048, pts:5}
+];
+const D_BY={}; DISTRICTS.forEach(d=>D_BY[d.id]=d);
+const HOME = 'kyzylorda';                    // регион пользователя
+
+/* ===================== календарь наблюдений ===================== */
+const WEEKS = 8, LAST_W = 46;                // недели 39…46
+const WEEK_START = new Date(2026,10,9);      // понедельник недели 46
+function weekDates(w){
+  const s=new Date(WEEK_START.getTime()-(LAST_W-w)*7*864e5), e=new Date(s.getTime()+6*864e5);
+  /* неделя внутри месяца — «09–15.11.2026», на стыке месяцев — «26.10–01.11.2026» */
+  const from = s.getMonth()===e.getMonth() ? U.pad(s.getDate())
+             : U.pad(s.getDate())+'.'+U.pad(s.getMonth()+1);
+  return {s:s, e:e, label:'неделя '+w+', '+from+'–'+U.d(e)};
+}
+
+/* ===================== справочники ===================== */
+const PT_KIND=['Супермаркет','Магазин','Минимаркет','Рынок'];
+const PT_NAME=['Арман','Шұғыла','Береке','Нұр','Жайна','Алтын дән','Орталық','Жастар','Мерей',
+  'Ақ жол','Бәйтерек','Сұңқар','Дәмді','Ырыс','Жібек жолы','Қуаныш','Самал','Болашақ','Айна',
+  'Дария','Тұмар','Шаңырақ','Ақмарал','Еркін','Зере','Нұрлы','Сыр бойы','Қызығы','Тоған','Алтын асық',
+  'Жемчужина','Сарыарқа','Кемел','Асыл','Думан','Ақниет','Таңшолпан','Қарлығаш','Нысана','Жаңа ғасыр',
+  'Сымбат','Бидай','Қайнар','Отау','Ұлан','Талап'];
+const STREETS=['ул. Абая','пр. Коркыт ата','ул. Айтеке би','ул. Желтоксан','пр. Назарбаева',
+  'ул. Бейбарыс султан','ул. Токмагамбетова','ул. Жахаева','ул. Казыбек би','ул. Султан Бейбарыс',
+  'ул. Шаймерденова','ул. Акмешит'];
+const STAFF=['Сапарова А. К.','Ералиев Д. М.','Нұрланова Г. Т.','Оспанов Б. С.'];
+const ME = STAFF[0];
+const STATUS = [
+  {id:'new',   n:'Новый'},
+  {id:'work',  n:'В работе'},
+  {id:'sent',  n:'Направлен на проверку'},
+  {id:'just',  n:'Обосновано'},
+  {id:'error', n:'Ошибка данных'}
+];
+const S_BY={}; STATUS.forEach(s=>S_BY[s.id]=s);
+
+/* ===================== состояние ===================== */
+const ST = {
+  screen:'signals', region:HOME, week:LAST_W, demo:true,
+  sel:null, selPrice:null, selReport:null,
+  sort:{k:'prio', dir:-1}, refTab:'prod', upload:null
+};
+
+/* ===================== товары ===================== */
+let PRODUCTS=[];          // [{id, n, u, idx}] — перечень СЗПТ по форме Ц-101э
+function initProducts(){
+  const D=SZPT_DATA;
+  PRODUCTS = D.order.map((pid,i)=>({id:pid, n:D.products[pid], u:D.units[pid], idx:i}));
+}
+const P_BY={};
+/* средняя цена по региону (БНС) и индекс к предыдущей неделе */
+function regPrice(reg,pid){ return SZPT_DATA.prices[reg+'|'+pid]; }
+function regWow(reg,pid){ const v=SZPT_DATA.wow[reg+'|'+pid]; return v===undefined?0:v; }
+
+/* ===================== торговые точки ===================== */
+let POINTS=[];
+function initPoints(){
+  POINTS=[]; let seq=0;
+  DISTRICTS.forEach((d,di)=>{
+    for(let i=0;i<d.pts;i++){
+      const rnd=U.rng('pt|'+d.id+'|'+i);
+      const kind=PT_KIND[Math.floor(rnd()*(d.id==='kzo-city'?4:3))];
+      const name=PT_NAME[(di*7+i*3+seq)%PT_NAME.length];
+      /* смещение цен точки: формат торговли и собственная наценка */
+      const bias=(kind==='Рынок'?0.965:kind==='Супермаркет'?0.985:1.015)+(rnd()-0.5)*0.04;
+      POINTS.push({
+        id:'ТТ-'+U.pad(di+1)+U.pad(i+1),
+        n:kind+' «'+name+'»', kind:kind, d:d.id,
+        addr:STREETS[Math.floor(rnd()*STREETS.length)]+', '+(1+Math.floor(rnd()*90)),
+        bias:bias,
+        /* дата последней передачи данных: часть точек передаёт с задержкой */
+        lag: rnd()<0.12 ? 1+Math.floor(rnd()*3) : 0
+      });
+      seq++;
+    }
+  });
+}
+const PT_BY={};
+
+/* ===================== наблюдения ===================== */
+/* OBS — наблюдения последней недели по парам точка × товар.
+   Цена точки = средняя по региону (БНС) × коэффициент района × смещение точки
+   × недельный шум; отдельным парам задаётся превышение (материал для проверки). */
+let OBS=[], MED={};        // MED['districtId|productId'] — медиана района по неделям
+function initObs(){
+  OBS=[]; MED={};
+  const reg=HOME;
+  /* история 8 недель по каждой паре */
+  PRODUCTS.forEach(p=>{
+    const base=regPrice(reg,p.id); if(!base) return;
+    const wow=regWow(reg,p.id);
+    DISTRICTS.forEach(d=>{
+      const pts=POINTS.filter(x=>x.d===d.id);
+      const series={};                                  // ptId -> [8 недель]
+      pts.forEach(pt=>{
+        const rnd=U.rng('obs|'+pt.id+'|'+p.id);
+        /* превышение по паре: на четыре умеренных приходится одно существенное */
+        const over = rnd()<0.075 ? (rnd()<0.8 ? 1.06+rnd()*0.08 : 1.16+rnd()*0.16) : 1;
+        const start= base*d.k*pt.bias*(1-wow/100)*(0.985+rnd()*0.03);
+        const arr=[]; let e=0;
+        for(let w=0;w<WEEKS;w++){
+          e=e*0.5+(rnd()-0.5)*0.012;
+          const drift=1+(wow/100)*(w/(WEEKS-1));
+          /* превышение появляется не сразу — видно по графику, с какой недели */
+          const k=over>1 ? (w>=WEEKS-3 ? 1+(over-1)*Math.min(1,(w-(WEEKS-4))/2) : 1) : 1;
+          arr.push(start*drift*k*(1+e));
+        }
+        series[pt.id]=arr;
+      });
+      /* медиана района по неделям */
+      const med=[];
+      for(let w=0;w<WEEKS;w++) med.push(U.med(pts.map(pt=>series[pt.id][w])));
+      MED[d.id+'|'+p.id]=med;
+      pts.forEach(pt=>{
+        OBS.push({pt:pt.id, d:d.id, p:p.id, hist:series[pt.id]});
+      });
+    });
+  });
+}
+
+/* показатели наблюдения на выбранную неделю */
+function obsView(o,w){
+  const i=WEEKS-1-(LAST_W-w);
+  const price=o.hist[i], med=MED[o.d+'|'+o.p][i];
+  const prev=i>0?o.hist[i-1]:o.hist[0];
+  const dev=(price/med-1)*100, wow=(price/prev-1)*100;
+  const level = (Math.abs(dev)>=CONFIG.devHigh||wow>=CONFIG.wowHigh) ? 'high'
+              : (Math.abs(dev)>=CONFIG.devMid ||wow>=CONFIG.wowMid ) ? 'mid' : 'norm';
+  return {price:price, med:med, dev:dev, wow:wow, level:level, i:i};
+}
+const LEVEL={high:'Высокий', mid:'Средний', norm:'Норма'};
+
+/* ===================== очередь сигналов ===================== */
+/* В очередь попадают наблюдения с отклонением от медианы района или недельным
+   изменением выше порога; остальные остаются в базе наблюдений (раздел «Цены»). */
+let QUEUE=[];
+function initQueue(){
+  QUEUE=[];
+  OBS.forEach(o=>{
+    const v=obsView(o,LAST_W);
+    if(Math.abs(v.dev)<CONFIG.queueDev && Math.abs(v.wow)<CONFIG.queueWow) return;
+    const rnd=U.rng('q|'+o.pt+'|'+o.p);
+    let st='new', owner='';
+    const r=rnd();
+    if(v.level!=='norm'){
+      if(r<0.14){ st='work';  owner=STAFF[Math.floor(rnd()*STAFF.length)]; }
+      else if(r<0.22){ st='sent';  owner=STAFF[Math.floor(rnd()*STAFF.length)]; }
+      else if(r<0.30){ st='just';  owner=STAFF[Math.floor(rnd()*STAFF.length)]; }
+      else if(r<0.35){ st='error'; owner=STAFF[Math.floor(rnd()*STAFF.length)]; }
+    }else if(r<0.10){ st='just'; owner=STAFF[Math.floor(rnd()*STAFF.length)]; }
+    QUEUE.push({
+      key:o.pt+'|'+o.p, o:o, st:st, owner:owner, cmt:'',
+      /* наличие подтверждающего материала */
+      ev: rnd()<0.42 ? 'Фотография ценника от '+U.d(weekDates(LAST_W).s) : ''
+    });
+  });
+  /* приоритет: уровень, затем величина отклонения */
+  QUEUE.forEach(q=>{ const v=obsView(q.o,LAST_W);
+    q.prio=(v.level==='high'?2e6:v.level==='mid'?1e6:0)+Math.abs(v.dev)*1000; });
+}
+const Q_BY={};
+</script>
+
+<script>
+'use strict';
+/* ===================== график (встроенный SVG, без библиотек) ===================== */
+function chartSVG(series, labels, fmt){
+  const W=400, H=150, L=44, R=8, T=10, B=20;
+  const all=series.reduce((a,s)=>a.concat(s.v),[]);
+  let min=Math.min.apply(null,all), max=Math.max.apply(null,all);
+  const pad=(max-min)*0.18||Math.max(1,max*0.02); min-=pad; max+=pad;
+  const x=i=>L+i*(W-L-R)/(labels.length-1);
+  const y=v=>T+(1-(v-min)/(max-min))*(H-T-B);
+  let g='';
+  /* горизонтальная сетка и подписи оси */
+  for(let i=0;i<=2;i++){
+    const v=min+(max-min)*i/2, yy=y(v);
+    g+='<line x1="'+L+'" y1="'+yy.toFixed(1)+'" x2="'+(W-R)+'" y2="'+yy.toFixed(1)+
+       '" stroke="#EDE8DF"/><text x="'+(L-6)+'" y="'+(yy+3.5).toFixed(1)+'" text-anchor="end">'+
+       fmt(v)+'</text>';
+  }
+  labels.forEach((l,i)=>{ g+='<text x="'+x(i).toFixed(1)+'" y="'+(H-6)+'" text-anchor="middle">'+l+'</text>'; });
+  series.forEach(s=>{
+    const d=s.v.map((v,i)=>(i?'L':'M')+x(i).toFixed(1)+' '+y(v).toFixed(1)).join(' ');
+    g+='<path d="'+d+'" fill="none" stroke="'+s.c+'" stroke-width="1.6"'+
+       (s.dash?' stroke-dasharray="4 3"':'')+'/>';
+    const li=s.v.length-1;
+    g+='<circle cx="'+x(li).toFixed(1)+'" cy="'+y(s.v[li]).toFixed(1)+'" r="2.6" fill="'+s.c+'"/>';
+  });
+  return '<svg class="chart" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" role="img">'+g+'</svg>';
+}
+
+/* ===================== приложение ===================== */
+const SCREENS=[
+  {id:'signals', n:'Сигналы',        t:'Сигналы'},
+  {id:'appeals', n:'Обращения',      t:'Обращения граждан'},
+  {id:'prices',  n:'Цены',           t:'Цены на СЗПТ'},
+  {id:'upload',  n:'Загрузка данных',t:'Загрузка данных'},
+  {id:'ref',     n:'Справочники',    t:'Справочники'},
+  {id:'reports', n:'Отчёты',         t:'Отчёты'},
+  {id:'journal', n:'Журнал решений', t:'Журнал решений'},
+  {id:'settings',n:'Настройки',      t:'Настройки'}
+];
+
+const App={
+  init(){
+    initProducts(); PRODUCTS.forEach(p=>P_BY[p.id]=p);
+    initPoints();   POINTS.forEach(p=>PT_BY[p.id]=p);
+    initObs(); initQueue(); QUEUE.forEach(q=>Q_BY[q.key]=q);
+    Journal.load();
+    this.menu(); this.header(); this.settings();
+    Sig.init(); Prices.init(); Ref.init(); Reports.init(); Journal.init();
+    const h=location.hash.replace('#','');
+    this.go(SCREENS.some(s=>s.id===h)?h:'signals');
+  },
+  menu(){
+    U.el('menu').innerHTML=SCREENS.filter(s=>s.id!=='settings').map(s=>{
+      const c=s.id==='signals'
+        ? '<span class="cnt">'+QUEUE.filter(q=>q.st==='new').length+'</span>' : '';
+      return '<a class="mi" data-scr="'+s.id+'">'+s.n+c+'</a>';
+    }).join('');
+    document.querySelectorAll('.mi').forEach(a=>a.onclick=()=>App.go(a.dataset.scr));
+  },
+  go(id){
+    ST.screen=id; location.hash=id;
+    document.querySelectorAll('.page').forEach(p=>p.classList.toggle('on',p.id==='sc-'+id));
+    document.querySelectorAll('.mi').forEach(a=>a.classList.toggle('on',a.dataset.scr===id));
+    U.el('scrTitle').textContent=(SCREENS.find(s=>s.id===id)||{}).t||'';
+    if(id==='signals') Sig.render();
+    if(id==='appeals') Appeals.load();
+    if(id==='prices'){ Prices.render(); Fx.render(); RegionMap.render(); }
+    if(id==='ref')     Ref.render();
+    if(id==='reports') Reports.render();
+    if(id==='journal') Journal.render();
+    window.scrollTo(0,0);
+  },
+  header(){
+    U.el('hRegion').innerHTML=REGIONS.map(r=>
+      '<option value="'+r.id+'"'+(r.id===ST.region?' selected':'')+'>'+r.n+'</option>').join('');
+    const ws=[]; for(let w=LAST_W;w>=LAST_W-3;w--) ws.push(w);
+    U.el('hWeek').innerHTML=ws.map(w=>
+      '<option value="'+w+'"'+(w===ST.week?' selected':'')+'>'+weekDates(w).label+'</option>').join('');
+  },
+  setRegion(v){ ST.region=v; ST.sel=null; ST.selPrice=null;
+    Sig.render(); Prices.render(); Ref.render(); Reports.render(); },
+  setWeek(v){ ST.week=+v; ST.sel=null; Sig.render(); Prices.render(); Reports.render();
+    U.el('hUpd').textContent='Данные обновлены: '+U.d(new Date(weekDates(ST.week).e.getTime()-864e5))+
+      ' 09:00 · Источник: мониторинг акимата'; },
+  setDemo(v){ ST.demo=v;
+    U.el('foot').textContent=v?'Данные демонстрационные.'
+      :'Рабочий режим: наблюдения поступают из загрузок районных отделов.';
+    Toast(v?'Демонстрационный режим включён':'Демонстрационный режим выключен'); },
+  settings(){
+    U.el('setThr').innerHTML=[
+      ['Отклонение от медианы района, уровень «Высокий»', '± '+CONFIG.devHigh+' %'],
+      ['Отклонение от медианы района, уровень «Средний»', '± '+CONFIG.devMid+' %'],
+      ['Изменение к предыдущей неделе, уровень «Высокий»', '+ '+CONFIG.wowHigh+' %'],
+      ['Изменение к предыдущей неделе, уровень «Средний»', '+ '+CONFIG.wowMid+' %'],
+      ['Включение наблюдения в очередь, отклонение от', '± '+CONFIG.queueDev+' %'],
+      ['Предельная торговая надбавка', CONFIG.markup+' %']
+    ].map(([k,v])=>'<dt>'+k+'</dt><dd>'+v+'</dd>').join('');
+    const D=SZPT_DATA;
+    U.el('setSrc').innerHTML=[
+      ['Средние цены по регионам, индексы','БНС АСПиР РК, форма Ц-101э'],
+      ['Выпуск','от '+U.d(new Date(D.published))],
+      ['Файл выпуска', D.file],
+      ['Позиций в перечне СЗПТ', PRODUCTS.length],
+      ['Регионов', REGIONS.length],
+      ['Торговых точек в регионе наблюдения', POINTS.length],
+      ['Наблюдений за неделю', OBS.length],
+      ['Курсы валют','Национальный Банк РК, ежедневно'],
+      ['Снимок курсов в файле', SZPT_DATA.fx?('на '+SZPT_DATA.fx.date):'отсутствует']
+    ].map(([k,v])=>'<dt>'+k+'</dt><dd>'+U.esc(v)+'</dd>').join('');
+  }
+};
+function Toast(msg){ const t=U.el('toast'); t.textContent=msg; t.classList.add('on');
+  clearTimeout(Toast._t); Toast._t=setTimeout(()=>t.classList.remove('on'),2200); }
+function csvDownload(name, rows){
+  const csv='﻿'+rows.map(r=>r.map(c=>{
+    const s=String(c===null||c===undefined?'':c);
+    return /[";\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; }).join(';')).join('\r\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+  a.download=name; document.body.appendChild(a); a.click(); a.remove();
+  Toast('Файл сформирован: '+name);
+}
+
+/* ===================== 1. СИГНАЛЫ ===================== */
+const Sig={
+  cols:[
+    {k:'p',    n:'Товар'},
+    {k:'pt',   n:'Торговая точка'},
+    {k:'d',    n:'Район'},
+    {k:'price',n:'Цена за ед.', num:1},
+    {k:'u',    n:'Ед.'},
+    {k:'med',  n:'Медиана района', num:1},
+    {k:'dev',  n:'Отклонение от медианы, %', num:1},
+    {k:'wow',  n:'Изменение за неделю, %', num:1},
+    {k:'level',n:'Уровень'},
+    {k:'st',   n:'Статус проверки'},
+    {k:'owner',n:'Ответственный'}
+  ],
+  init(){
+    U.el('fDistrict').innerHTML='<option value="">все районы</option>'+
+      DISTRICTS.map(d=>'<option value="'+d.id+'">'+d.n+'</option>').join('');
+    U.el('fProduct').innerHTML='<option value="">все товары</option>'+
+      PRODUCTS.map(p=>'<option value="'+p.id+'">'+U.esc(p.n)+'</option>').join('');
+    U.el('fStatus').innerHTML='<option value="">все</option>'+
+      STATUS.map(s=>'<option value="'+s.id+'">'+s.n+'</option>').join('');
+    U.el('fOwner').innerHTML='<option value="">все</option><option value="__me">Сапарова А. К. (я)</option>'+
+      '<option value="__none">не назначен</option>'+
+      STAFF.slice(1).map(s=>'<option value="'+s+'">'+s+'</option>').join('');
+  },
+  reset(){ ['fDistrict','fProduct','fLevel','fStatus','fOwner'].forEach(id=>U.el(id).value='');
+    U.el('fSearch').value=''; this.render(); },
+  rows(){
+    const fd=U.el('fDistrict').value, fp=U.el('fProduct').value, fl=U.el('fLevel').value,
+          fs=U.el('fStatus').value, fo=U.el('fOwner').value,
+          q=U.el('fSearch').value.trim().toLowerCase();
+    return QUEUE.map(x=>{
+      const v=obsView(x.o,ST.week), p=P_BY[x.o.p], pt=PT_BY[x.o.pt];
+      return {q:x, v:v, p:p, pt:pt, d:D_BY[x.o.d]};
+    }).filter(r=>{
+      if(fd && r.q.o.d!==fd) return false;
+      if(fp && r.q.o.p!==fp) return false;
+      if(fl && r.v.level!==fl) return false;
+      if(fs && r.q.st!==fs) return false;
+      if(fo==='__me' && r.q.owner!==ME) return false;
+      if(fo==='__none' && r.q.owner) return false;
+      if(fo && fo!=='__me' && fo!=='__none' && r.q.owner!==fo) return false;
+      if(q && !(r.p.n.toLowerCase().includes(q)||r.pt.n.toLowerCase().includes(q)||
+                r.pt.id.toLowerCase().includes(q)||r.d.n.toLowerCase().includes(q))) return false;
+      return true;
+    });
+  },
+  sort(k){ ST.sort = ST.sort.k===k ? {k:k,dir:-ST.sort.dir} : {k:k,dir:k==='p'||k==='pt'||k==='d'?1:-1};
+    this.render(); },
+  val(r,k){
+    switch(k){
+      case 'p': return r.p.n; case 'pt': return r.pt.n; case 'd': return r.d.n;
+      case 'u': return r.p.u; case 'price': return r.v.price; case 'med': return r.v.med;
+      case 'dev': return r.v.dev; case 'wow': return r.v.wow;
+      case 'level': return r.v.level==='high'?3:r.v.level==='mid'?2:1;
+      case 'st': return S_BY[r.q.st].n; case 'owner': return r.q.owner||'я';
+      default: return r.q.prio;
+    }
+  },
+  render(){
+    if(ST.region!==HOME){ this.foreign(); return; }
+    U.el('sgWork').classList.toggle('wide', !ST.sel);
+    const wk=ST.week, prev=wk-1;
+    U.el('sgHead').innerHTML=this.cols.map(c=>{
+      let n=c.n;
+      if(c.k==='price') n='Цена за ед., нед. '+wk;
+      if(c.k==='med')   n='Медиана района, нед. '+wk;
+      if(c.k==='wow')   n='Изменение к нед. '+prev+', %';
+      const ar=ST.sort.k===c.k?' <span class="ar">'+(ST.sort.dir>0?'▲':'▼')+'</span>':'';
+      return '<th class="srt'+(c.num?' num':'')+'" onclick="Sig.sort(\''+c.k+'\')">'+n+ar+'</th>';
+    }).join('');
+
+    const rows=this.rows(), k=ST.sort.k, dir=ST.sort.dir;
+    rows.sort((a,b)=>{
+      const x=this.val(a,k), y=this.val(b,k);
+      if(typeof x==='string') return x.localeCompare(y,'ru')*dir;
+      return (x-y)*dir;
+    });
+    U.el('sgBody').innerHTML = rows.length ? rows.map(r=>{
+      const sel=ST.sel===r.q.key?' class="sel"':'';
+      return '<tr'+sel+' onclick="Sig.open(\''+r.q.key+'\')">'+
+        '<td class="cut" title="'+U.esc(r.p.n)+'">'+U.esc(r.p.n)+'</td>'+
+        '<td class="cut-s nowrap" title="'+U.esc(r.pt.n)+'">'+U.esc(r.pt.n)+
+          ' <span class="mut">'+r.pt.id+'</span></td>'+
+        '<td class="nowrap">'+r.d.n+'</td>'+
+        '<td class="num">'+U.n(r.v.price)+'</td>'+
+        '<td class="mut nowrap">'+r.p.u+'</td>'+
+        '<td class="num">'+U.n(r.v.med)+'</td>'+
+        '<td class="num dev '+(r.v.dev>0?'up':'dn')+'">'+U.sign(r.v.dev)+'</td>'+
+        '<td class="num dev '+(r.v.wow>0?'up':'dn')+'">'+U.sign(r.v.wow)+'</td>'+
+        '<td><span class="st '+r.v.level+'"><i></i>'+LEVEL[r.v.level]+'</span></td>'+
+        '<td class="nowrap">'+S_BY[r.q.st].n+'</td>'+
+        '<td class="nowrap'+(r.q.owner?'':' mut')+'">'+(r.q.owner||'не назначен')+'</td></tr>';
+    }).join('') : '<tr><td colspan="11"><div class="empty">Наблюдений, отвечающих условиям отбора, нет.</div></td></tr>';
+
+    const hi=rows.filter(r=>r.v.level==='high').length, md=rows.filter(r=>r.v.level==='mid').length;
+    U.el('sgCount').textContent='Показано наблюдений: '+rows.length+' из '+QUEUE.length+
+      ' · с отклонением выше порога: '+(hi+md);
+    this.summary();
+    this.inspect();
+  },
+  summary(){
+    const all=QUEUE.map(x=>({q:x,v:obsView(x.o,ST.week)}));
+    const hi=all.filter(r=>r.v.level==='high').length, md=all.filter(r=>r.v.level==='mid').length;
+    const nw=all.filter(r=>r.q.st==='new').length, wk=all.filter(r=>r.q.st==='work').length,
+          sn=all.filter(r=>r.q.st==='sent').length;
+    const mine=all.filter(r=>r.q.owner===ME).length;
+    U.el('sgSum').innerHTML=[
+      ['Наблюдений в очереди', all.length],
+      ['Уровень «Высокий»', hi], ['Уровень «Средний»', md],
+      ['Не рассмотрено', nw], ['В работе', wk], ['Направлено на проверку', sn],
+      ['Закреплено за мной', mine]
+    ].map(([k,v])=>'<div><b>'+v+'</b>'+k+'</div>').join('')+
+      '<div class="mut">Период: '+weekDates(ST.week).label+'</div>';
+  },
+  foreign(){
+    const r=R_BY[ST.region];
+    U.el('sgWork').classList.add('wide');
+    U.el('sgSum').innerHTML='<div class="mut">Регион: '+r.n+'</div>';
+    U.el('sgHead').innerHTML='';
+    U.el('sgBody').innerHTML='<tr><td><div class="empty">Наблюдения по торговым точкам региона «'+r.n+
+      '» в систему не загружены.<br>Доступен свод средних цен по региону — раздел «Цены».</div></td></tr>';
+    U.el('sgCount').textContent='';
+    U.el('sgInsp').innerHTML='';
+  },
+  open(key){ ST.sel=ST.sel===key?null:key; this.render(); },
+  inspect(){
+    const box=U.el('sgInsp');
+    if(!ST.sel){
+      box.innerHTML='<div class="sec"><h3>Карточка наблюдения</h3>'+
+        '<p class="mut" style="font-size:12.5px;margin:0">Выберите строку в таблице, чтобы открыть '+
+        'динамику цены, цены соседних торговых точек и принять решение по наблюдению.</p></div>';
+      return;
+    }
+    const q=Q_BY[ST.sel], v=obsView(q.o,ST.week), p=P_BY[q.o.p], pt=PT_BY[q.o.pt], d=D_BY[q.o.d];
+    const reg=regPrice(HOME,p.id), med=MED[q.o.d+'|'+p.id];
+    const labels=[], ser=[], serM=[];
+    for(let w=0;w<WEEKS;w++){ labels.push(String(LAST_W-(WEEKS-1)+w)); ser.push(q.o.hist[w]); serM.push(med[w]); }
+    const over=((v.price/reg-1)*100);
+
+    box.innerHTML=
+      '<div class="sec" style="display:flex;align-items:flex-start;gap:10px">'+
+        '<div><h3 style="margin:0 0 2px">'+U.esc(p.n)+'</h3>'+
+        '<div class="mut" style="font-size:12px">'+U.esc(pt.n)+' · '+pt.id+' · '+d.n+'</div></div>'+
+        '<button class="close" onclick="Sig.open(\''+ST.sel+'\')" title="Закрыть">✕</button></div>'+
+
+      '<div class="sec"><dl class="kv">'+
+        '<dt>Цена за единицу, нед. '+ST.week+'</dt><dd><b>'+U.n(v.price)+'</b> '+p.u+'</dd>'+
+        '<dt>Медиана района, нед. '+ST.week+'</dt><dd>'+U.n(v.med)+' '+p.u+'</dd>'+
+        '<dt>Отклонение от медианы района</dt><dd class="dev '+(v.dev>0?'up':'dn')+'">'+U.sign(v.dev)+' %</dd>'+
+        '<dt>Изменение к нед. '+(ST.week-1)+'</dt><dd class="dev '+(v.wow>0?'up':'dn')+'">'+U.sign(v.wow)+' %</dd>'+
+        '<dt>Средняя по области, нед. '+LAST_W+'</dt><dd>'+U.n(reg)+' '+p.u+'</dd>'+
+        '<dt>Отклонение от средней по области</dt><dd class="dev '+(over>0?'up':'dn')+'">'+U.sign(over)+' %</dd>'+
+        '<dt>Уровень</dt><dd class="l" style="text-align:right"><span class="st '+v.level+'"><i></i>'+
+          LEVEL[v.level]+'</span></dd>'+
+        '<dt>Адрес</dt><dd class="l" style="text-align:right">'+U.esc(pt.addr)+'</dd>'+
+      '</dl></div>'+
+
+      '<div class="sec"><h3>Динамика цены, недели '+labels[0]+'–'+labels[WEEKS-1]+'</h3>'+
+        chartSVG([{v:ser,c:'#1F4E79'},{v:serM,c:'#7E776D',dash:1}],labels,v=>U.n(v))+
+        '<div class="lg"><span><i style="border-color:#1F4E79"></i>цена торговой точки</span>'+
+        '<span><i style="border-color:#7E776D;border-top-style:dashed"></i>медиана района</span></div>'+
+        '<p class="note">Единица измерения: '+p.u+'. Источник: наблюдения мониторинга акимата.</p></div>'+
+
+      '<div class="sec"><h3>Цены соседних торговых точек, нед. '+ST.week+'</h3>'+
+        this.neighbours(q)+'</div>'+
+
+      '<div class="sec"><h3>Подтверждающий материал</h3>'+
+        '<div class="ev"><div class="ph" id="evPh">'+(q.ev?U.esc(q.ev):'Материал не приложен')+'</div>'+
+        '<label class="btn btn-sm" for="evFile" style="display:inline-block">Приложить фотографию ценника</label>'+
+        '<input type="file" id="evFile" class="sr" accept="image/*" onchange="Sig.evidence(this)">'+
+        '</div></div>'+
+
+      '<div class="sec"><h3>Решение по наблюдению</h3>'+
+        '<textarea id="sgCmt" placeholder="Комментарий (вносится в журнал решений)">'+U.esc(q.cmt)+'</textarea>'+
+        '<div class="act">'+
+          '<button class="btn btn-p btn-sm" onclick="Sig.decide(\'sent\')">Направить на проверку</button>'+
+          '<button class="btn btn-sm" onclick="Sig.decide(\'just\')">Обосновано</button>'+
+          '<button class="btn btn-sm" onclick="Sig.decide(\'error\')">Ошибка данных</button>'+
+          '<button class="btn btn-sm" onclick="Sig.decide(\'work\')">Взять в работу</button>'+
+        '</div>'+
+        '<p class="note">Текущий статус: '+S_BY[q.st].n+(q.owner?' · ответственный: '+q.owner:'')+
+        '. Решение записывается в журнал с указанием пользователя и времени.</p></div>';
+  },
+  neighbours(q){
+    const list=OBS.filter(o=>o.d===q.o.d&&o.p===q.o.p).map(o=>{
+      const v=obsView(o,ST.week); return {pt:PT_BY[o.pt], v:v, me:o.pt===q.o.pt};
+    }).sort((a,b)=>a.v.price-b.v.price);
+    const p=P_BY[q.o.p];
+    return '<div class="tw"><table class="t"><thead><tr><th>Торговая точка</th>'+
+      '<th class="num">Цена, '+p.u+'</th><th class="num">Откл., %</th></tr></thead><tbody>'+
+      list.map(r=>'<tr'+(r.me?' class="sel"':'')+'><td class="nowrap">'+U.esc(r.pt.n)+
+        ' <span class="mut">'+r.pt.id+'</span></td>'+
+        '<td class="num">'+U.n(r.v.price)+'</td>'+
+        '<td class="num dev '+(r.v.dev>0?'up':'dn')+'">'+U.sign(r.v.dev)+'</td></tr>').join('')+
+      '</tbody></table></div>';
+  },
+  evidence(inp){
+    const f=inp.files&&inp.files[0]; if(!f) return;
+    const q=Q_BY[ST.sel]; q.ev='Фотография ценника: '+f.name;
+    U.el('evPh').innerHTML='<img src="'+URL.createObjectURL(f)+'" alt="Фотография ценника">';
+    Toast('Материал приложен к наблюдению');
+  },
+  decide(st){
+    const q=Q_BY[ST.sel]; if(!q) return;
+    q.cmt=U.el('sgCmt').value.trim();
+    q.st=st; q.owner=ME;
+    const p=P_BY[q.o.p], pt=PT_BY[q.o.pt];
+    Journal.add({
+      obj:p.n+' · '+pt.n+' ('+pt.id+')',
+      act:S_BY[st].n,
+      cmt:q.cmt
+    });
+    Toast('Решение записано в журнал: '+S_BY[st].n);
+    App.menu(); this.render();
+  }
+};
+</script>
+
+<script>
+'use strict';
+/* ===================== 2. ЦЕНЫ ===================== */
+const Prices={
+  init(){},
+  stat(pid){                       /* свод по районам региона наблюдения */
+    const vals=DISTRICTS.map(d=>{
+      const m=MED[d.id+'|'+pid]; return m?m[WEEKS-1-(LAST_W-ST.week)]:null;
+    }).filter(v=>v!==null);
+    if(!vals.length) return null;
+    const mn=Math.min.apply(null,vals), mx=Math.max.apply(null,vals);
+    return {med:U.med(vals), min:mn, max:mx, spread:(mx/mn-1)*100,
+            obs:OBS.filter(o=>o.p===pid).length};
+  },
+  render(){
+    const home=ST.region===HOME, q=U.el('prSearch').value.trim().toLowerCase(),
+          grp=U.el('prGroup').value;
+    U.el('prWork').classList.toggle('wide', !ST.selPrice);
+    U.el('prHead').innerHTML=
+      '<th>Наименование товара по форме Ц-101э</th><th>Ед.</th>'+
+      '<th class="num">Средняя по региону, нед. '+LAST_W+'</th>'+
+      '<th class="num">Изменение к нед. '+(LAST_W-1)+', %</th>'+
+      (home?'<th class="num">Медиана районов, нед. '+ST.week+'</th>'+
+            '<th class="num">Минимум</th><th class="num">Максимум</th>'+
+            '<th class="num">Разброс, %</th><th class="num">Наблюдений</th>':'');
+    const rows=PRODUCTS.filter(p=>{
+      if(q && !p.n.toLowerCase().includes(q)) return false;
+      const w=regWow(ST.region,p.id), s=home?this.stat(p.id):null;
+      if(grp==='up' && !(w>0)) return false;
+      if(grp==='dn' && !(w<0)) return false;
+      if(grp==='spread' && !(s&&s.spread>10)) return false;
+      return true;
+    });
+    U.el('prBody').innerHTML = rows.length ? rows.map(p=>{
+      const price=regPrice(ST.region,p.id), w=regWow(ST.region,p.id), s=home?this.stat(p.id):null;
+      const sel=ST.selPrice===p.id?' class="sel"':'';
+      return '<tr'+sel+' onclick="Prices.open(\''+p.id+'\')">'+
+        '<td class="cut" title="'+U.esc(p.n)+'">'+U.esc(p.n)+'</td>'+
+        '<td class="mut nowrap">'+p.u+'</td>'+
+        '<td class="num">'+(price?U.n(price):'—')+'</td>'+
+        '<td class="num dev '+(w>0?'up':w<0?'dn':'')+'">'+(w?U.sign(w):'0,0')+'</td>'+
+        (home?'<td class="num">'+U.n(s.med)+'</td><td class="num">'+U.n(s.min)+'</td>'+
+              '<td class="num">'+U.n(s.max)+'</td>'+
+              '<td class="num'+(s.spread>10?' dev up':'')+'">'+U.n1(s.spread)+'</td>'+
+              '<td class="num mut">'+s.obs+'</td>':'')+'</tr>';
+    }).join('') : '<tr><td colspan="9"><div class="empty">Позиций, отвечающих условиям отбора, нет.</div></td></tr>';
+
+    const D=SZPT_DATA;
+    U.el('prSrc').innerHTML='<span class="note" style="margin:0">Средние цены и индексы — '+
+      U.esc(D.source)+', выпуск от '+U.d(new Date(D.published))+'. '+
+      '<a href="'+D.sourceUrl+'" target="_blank" rel="noopener">Источник</a>'+
+      (home?'. Медиана, минимум, максимум и разброс — по наблюдениям мониторинга акимата ('+
+        POINTS.length+' торговых точек, '+DISTRICTS.length+' районов).':
+        '. Наблюдения по торговым точкам региона не загружены.')+'</span>';
+    this.inspect();
+  },
+  open(pid){ ST.selPrice=ST.selPrice===pid?null:pid; this.render();
+    if(ST.selPrice){ RegionMap.prod=pid; RegionMap.render(); } },
+  inspect(){
+    const box=U.el('prInsp');
+    if(!ST.selPrice){
+      box.innerHTML='<div class="sec"><h3>Позиция перечня</h3><p class="mut" style="font-size:12.5px;margin:0">'+
+        'Выберите строку, чтобы увидеть цену по районам и сопоставление со средней по республике.</p></div>';
+      return;
+    }
+    const p=P_BY[ST.selPrice], price=regPrice(ST.region,p.id), nat=SZPT_DATA.national[p.id],
+          w=regWow(ST.region,p.id), home=ST.region===HOME;
+    let h='<div class="sec" style="display:flex;align-items:flex-start;gap:10px">'+
+      '<div><h3 style="margin:0 0 2px">'+U.esc(p.n)+'</h3>'+
+      '<div class="mut" style="font-size:12px">Единица измерения: '+p.u+' · '+R_BY[ST.region].n+'</div></div>'+
+      '<button class="close" onclick="Prices.open(\''+p.id+'\')" title="Закрыть">✕</button></div>'+
+      '<div class="sec"><dl class="kv">'+
+      '<dt>Средняя по региону, нед. '+LAST_W+'</dt><dd><b>'+U.n(price)+'</b> '+p.u+'</dd>'+
+      '<dt>Изменение к нед. '+(LAST_W-1)+'</dt><dd class="dev '+(w>0?'up':'dn')+'">'+U.sign(w)+' %</dd>'+
+      '<dt>Средняя по обследованным городам</dt><dd>'+U.n(nat)+' '+p.u+'</dd>'+
+      '<dt>Отклонение от средней по республике</dt><dd class="dev '+(price>nat?'up':'dn')+'">'+
+        U.sign((price/nat-1)*100)+' %</dd>'+
+      '<dt>Город наблюдения</dt><dd class="l" style="text-align:right">'+R_BY[ST.region].c+'</dd>'+
+      '</dl><p class="note">Источник: БНС АСПиР РК, форма Ц-101э, выпуск от '+
+        U.d(new Date(SZPT_DATA.published))+'.</p></div>';
+
+    if(home){
+      const i=WEEKS-1-(LAST_W-ST.week);
+      const rows=DISTRICTS.map(d=>{
+        const m=MED[d.id+'|'+p.id][i];
+        return {d:d, m:m, dev:(m/price-1)*100, n:POINTS.filter(x=>x.d===d.id).length};
+      }).sort((a,b)=>b.m-a.m);
+      h+='<div class="sec"><h3>Медиана по районам, нед. '+ST.week+'</h3>'+
+        '<div class="tw"><table class="t"><thead><tr><th>Район</th>'+
+        '<th class="num">Медиана, '+p.u+'</th><th class="num">К средней по области, %</th>'+
+        '<th class="num">Точек</th></tr></thead><tbody>'+
+        rows.map(r=>'<tr><td class="nowrap">'+r.d.n+'</td><td class="num">'+U.n(r.m)+'</td>'+
+          '<td class="num dev '+(r.dev>0?'up':'dn')+'">'+U.sign(r.dev)+'</td>'+
+          '<td class="num mut">'+r.n+'</td></tr>').join('')+'</tbody></table></div>'+
+        '<p class="note">Медиана района рассчитывается по наблюдениям торговых точек района за неделю.</p></div>';
+
+      const hi=QUEUE.filter(x=>x.o.p===p.id&&obsView(x.o,ST.week).level!=='norm').length;
+      h+='<div class="sec"><dl class="kv">'+
+        '<dt>Наблюдений с отклонением выше порога</dt><dd>'+hi+'</dd>'+
+        '<dt>Предельная торговая надбавка</dt><dd>'+CONFIG.markup+' %</dd></dl>'+
+        '<div class="act"><button class="btn btn-sm" onclick="Prices.toSignals(\''+p.id+'\')">'+
+        'Показать наблюдения по позиции</button></div></div>';
+    }
+    box.innerHTML=h;
+  },
+  toSignals(pid){ App.go('signals'); U.el('fProduct').value=pid; Sig.render(); }
+};
+
+/* ===================== схема расположения регионов =====================
+   Цена выбранной позиции перечня по всем регионам и отклонение от средней
+   по обследованным городам республики. Данные — выпуск БНС. */
+const RegionMap={
+  prod:null,
+  level(dev){ return dev>=10?'high':dev>=5?'mid':'norm'; },
+  render(){
+    const box=U.el('mapPanel'); if(!box) return;
+    if(!this.prod) this.prod=PRODUCTS[0].id;
+    const p=P_BY[this.prod], nat=SZPT_DATA.national[p.id];
+    const cells=REGIONS.map(r=>{
+      const v=regPrice(r.id,p.id), dev=v&&nat?(v/nat-1)*100:0, g=GRID[r.id]||[1,1];
+      const lv=this.level(dev);
+      const txt=lv==='high'?'Выше средней':lv==='mid'?'Умеренно выше':'В пределах средней';
+      return '<button class="rg'+(r.id===ST.region?' home':'')+'" style="grid-column:'+g[0]+
+        ';grid-row:'+g[1]+'" onclick="RegionMap.go(\''+r.id+'\')" title="'+U.esc(r.n)+
+        ' · наблюдение в городе '+U.esc(r.c)+'">'+
+        '<span class="nm">'+R_SHORT[r.id]+'</span>'+
+        '<span class="pr">'+(v?U.n(v):'—')+'</span>'+
+        '<span class="dv">'+U.sign(dev)+' % к средней по РК</span>'+
+        '<span class="st '+lv+'"><i></i>'+txt+'</span></button>';
+    }).join('');
+    box.innerHTML='<div class="ph"><h2>Цены по регионам</h2>'+
+      '<div class="sp"></div>'+
+      '<label for="mapProd" style="font-size:12.5px;color:var(--muted)">Позиция перечня</label>'+
+      '<select id="mapProd" onchange="RegionMap.pick(this.value)" style="max-width:320px">'+
+      PRODUCTS.map(x=>'<option value="'+x.id+'"'+(x.id===this.prod?' selected':'')+'>'+
+        U.esc(x.n)+'</option>').join('')+'</select></div>'+
+      '<div class="rmap">'+cells+'</div>'+
+      '<div style="padding:8px 14px;border-top:1px solid var(--line)">'+
+      '<span class="note" style="margin:0">Цена — '+p.u+', средняя по региону, нед. '+LAST_W+
+      '. Средняя по обследованным городам республики: '+U.n(nat)+' '+p.u+'. '+
+      'Уровень: «выше средней» — отклонение от 10 %, «умеренно выше» — от 5 до 10 %. '+
+      'Наблюдение ведётся в областном центре. Выбор региона открывает его в текущем разделе.</span></div>';
+  },
+  pick(v){ this.prod=v; this.render(); },
+  go(id){ ST.region=id; U.el('hRegion').value=id; App.setRegion(id); this.render(); }
+};
+
+/* ===================== курсы валют ===================== */
+/* Снимок курсов вшит в файл при сборке. Если запущен relay.py, курсы
+   обновляются с его адреса /api/rates (к nationalbank.kz браузер обратиться
+   не может — сайт не отдаёт заголовки CORS). */
+const FX_NAME={USD:'Доллар США', EUR:'Евро', RUB:'Российский рубль', CNY:'Китайский юань'};
+const Fx={
+  data: (SZPT_DATA&&SZPT_DATA.fx)||null, live:false, err:'',
+  start(){ this.load(); setInterval(()=>this.load(), 30*60*1000); },
+  load(){
+    fetch('/api/rates',{cache:'no-store'})
+      .then(r=>r.ok?r.json():Promise.reject(new Error('служба недоступна')))
+      .then(j=>{ if(!j||!j.rates||!j.rates.length) throw new Error('пустой ответ');
+                 this.data=j; this.live=true; this.err=''; this.render(); })
+      .catch(e=>{ this.live=false; this.err=e.message; this.render(); });
+  },
+  /* мини-график курса: 14 последних значений, без осей */
+  spark(v){
+    if(!v||v.length<2) return '<span class="mut">—</span>';
+    const W=118,H=22,P=2;
+    const mn=Math.min.apply(null,v), mx=Math.max.apply(null,v), sp=(mx-mn)||1;
+    const x=i=>P+i*(W-2*P)/(v.length-1), y=k=>P+(1-(k-mn)/sp)*(H-2*P);
+    const d=v.map((k,i)=>(i?'L':'M')+x(i).toFixed(1)+' '+y(k).toFixed(1)).join(' ');
+    return '<svg class="spark" width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+
+      '" role="img" aria-label="динамика курса за 14 дней"><path d="'+d+'"/>'+
+      '<circle cx="'+x(v.length-1).toFixed(1)+'" cy="'+y(v[v.length-1]).toFixed(1)+'" r="2"/></svg>';
+  },
+  cell(c){
+    if(!c) return '<span class="mut">—</span>';
+    return U.sign(c.abs,2)+'<span class="pct">'+U.sign(c.pct,1)+' %</span>';
+  },
+  render(){
+    const box=U.el('fxPanel'); if(!box) return;
+    const d=this.data;
+    if(!d){ box.innerHTML='<div class="pb mut" style="font-size:12.5px">'+
+      'Курсы валют недоступны: снимок не вшит в файл и локальная служба не запущена.</div>'; return; }
+    box.innerHTML='<div class="ph"><h2>Официальные курсы валют</h2>'+
+      '<span class="tag">установлены на '+U.esc(d.date)+'</span><div class="sp"></div>'+
+      (this.live?'':'<span class="note" style="margin:0">снимок на дату сборки файла · '+
+        'служба курсов не запущена</span>')+'</div>'+
+      '<div class="tw"><table class="t fx"><thead><tr>'+
+        '<th>Валюта</th><th class="num">Курс, ₸</th>'+
+        '<th class="num">За сутки</th><th class="num">За неделю</th><th class="num">За месяц</th>'+
+        '<th>Динамика за 14 дней</th></tr></thead><tbody>'+
+      d.rates.map(r=>'<tr>'+
+        '<td class="cur"><b>'+(FX_NAME[r.code]||r.code)+'</b><span>'+r.code+', за 1 единицу</span></td>'+
+        '<td class="num rate">'+U.n(r.v,2)+'</td>'+
+        '<td class="num">'+this.cell(r.change!==undefined&&r.v
+            ? {abs:r.change, pct:r.change/(r.v-r.change)*100} : null)+'</td>'+
+        '<td class="num">'+this.cell(r.w)+'</td>'+
+        '<td class="num">'+this.cell(r.m)+'</td>'+
+        '<td>'+this.spark(r.series)+'</td></tr>').join('')+
+      '</tbody></table></div>'+
+      '<div style="padding:8px 14px;border-top:1px solid var(--line)">'+
+      '<span class="note" style="margin:0">Источник: '+U.esc(d.source)+'. '+
+      '<a href="'+d.sourceUrl+'" target="_blank" rel="noopener">Официальные курсы</a>'+
+      (d.days?' · глубина истории: '+d.days+' дн.':'')+
+      '. Курс учитывается при разборе причин изменения цен на импортируемые позиции перечня.</span></div>';
+  }
+};
+
+/* ===================== 3. ЗАГРУЗКА ДАННЫХ ===================== */
+const UNITS_OK=['₸/кг','₸/л','₸/10 шт'];
+const Upload={
+  pick(inp){
+    const f=inp.files&&inp.files[0]; if(!f) return;
+    if(/\.(xlsx|xls)$/i.test(f.name)){
+      U.el('upResult').innerHTML='<div class="panel"><div class="pb">'+
+        '<b>Файл '+U.esc(f.name)+' принят.</b> Разбор файлов Excel выполняется серверным компонентом '+
+        'системы; в автономной версии доступен разбор CSV. Для проверки правил контроля используйте '+
+        'кнопку «Загрузить пример выгрузки».</div></div>';
+      return;
+    }
+    const rd=new FileReader();
+    rd.onload=()=>this.parse(this.csvRows(rd.result), f.name);
+    rd.readAsText(f,'utf-8');
+  },
+  csvRows(txt){
+    return txt.split(/\r?\n/).filter(l=>l.trim()).map(l=>{
+      const sep=(l.match(/;/g)||[]).length>=(l.match(/,/g)||[]).length?';':',';
+      return l.split(sep).map(c=>c.trim().replace(/^"|"$/g,''));
+    });
+  },
+  template(){
+    csvDownload('шаблон-наблюдений.csv',[
+      ['Код точки','Товар','Цена','Единица','Дата наблюдения'],
+      ['ТТ-0101','Сахар-песок','421','₸/кг','13.11.2026']
+    ]);
+  },
+  /* пример выгрузки районного отдела: часть строк с характерными ошибками */
+  sample(){
+    const rnd=U.rng('upload|sample|46'), rows=[['Код точки','Товар','Цена','Единица','Дата наблюдения']];
+    const date=U.d(weekDates(LAST_W).s);
+    const pick=()=>{
+      const pt=POINTS[Math.floor(rnd()*POINTS.length)], p=PRODUCTS[Math.floor(rnd()*PRODUCTS.length)];
+      const o=OBS.find(x=>x.pt===pt.id&&x.p===p.id);
+      return {pt:pt, p:p, price:o?o.hist[WEEKS-1]:regPrice(HOME,p.id)};
+    };
+    for(let i=0;i<64;i++){
+      const r=pick(); let price=Math.round(r.price), unit=r.p.u, code=r.pt.id, name=r.p.n;
+      const e=rnd();
+      if(e<0.06) price=price*10;                                  // цена завышена в 10 раз
+      else if(e<0.11) unit='₸/шт';                                // единица вне справочника
+      else if(e<0.14) name='Сахар рафинированный';                // товар вне перечня СЗПТ
+      else if(e<0.17) price='';                                   // цена не указана
+      else if(e<0.19) code='ТТ-9'+U.pad(Math.floor(rnd()*90));    // точка вне реестра
+      rows.push([code,name,price,unit,date]);
+    }
+    rows.push(rows[7].slice()); rows.push(rows[19].slice());      // повторные строки
+    this.parse(rows,'выгрузка-район-46.csv');
+  },
+  parse(rows, fname){
+    const head=rows[0], body=rows.slice(1);
+    const seen={};
+    const data=body.map((r,i)=>{
+      const [code,name,price,unit,date]=r;
+      const rec={i:i+2, code:code, name:name, price:price, unit:unit, date:date,
+                 err:null, fix:null, drop:false};
+      const pt=PT_BY[code];
+      const p=PRODUCTS.find(x=>x.n.toLowerCase()===String(name).toLowerCase());
+      const num=parseFloat(String(price).replace(',','.'));
+      const kk=code+'|'+name+'|'+date;
+      if(!pt)                      rec.err={t:'Код точки отсутствует в реестре', fixable:false};
+      else if(!p)                  rec.err={t:'Товар отсутствует в перечне СЗПТ', fixable:false};
+      else if(!price||isNaN(num))  rec.err={t:'Цена не указана или не является числом', fixable:false};
+      else if(UNITS_OK.indexOf(unit)<0 || unit!==p.u)
+                                   rec.err={t:'Единица измерения не соответствует справочной ('+p.u+')',
+                                            fixable:true, how:'unit', to:p.u};
+      else if(seen[kk])            rec.err={t:'Повторная строка (ранее — строка '+seen[kk]+')',
+                                            fixable:true, how:'drop'};
+      else{
+        const med=MED[pt.d+'|'+p.id][WEEKS-1];
+        if(num>med*5)              rec.err={t:'Цена превышает медиану района более чем в 5 раз',
+                                            fixable:true, how:'div10', to:Math.round(num/10)};
+        else if(num<med/5)         rec.err={t:'Цена ниже медианы района более чем в 5 раз',
+                                            fixable:false};
+      }
+      if(!rec.err && pt && p) seen[kk]=rec.i;
+      rec.pt=pt; rec.p=p; rec.num=num;
+      return rec;
+    });
+    ST.upload={fname:fname, head:head, data:data};
+    this.render();
+  },
+  fix(i){
+    const r=ST.upload.data[i];
+    if(!r.err||!r.err.fixable) return;
+    if(r.err.how==='unit'){ r.unit=r.err.to; r.fix='единица приведена к справочной'; }
+    if(r.err.how==='div10'){ r.price=r.err.to; r.num=r.err.to; r.fix='цена приведена к единице измерения'; }
+    if(r.err.how==='drop'){ r.drop=true; r.fix='повторная строка исключена'; }
+    r.err=null; this.render();
+  },
+  drop(i){ const r=ST.upload.data[i]; r.drop=true; r.err=null; r.fix='строка исключена'; this.render(); },
+  fixAll(){ ST.upload.data.forEach((r,i)=>{ if(r.err&&r.err.fixable) this.fix(i); }); },
+  render(){
+    const u=ST.upload; if(!u) return;
+    const errs=u.data.filter(r=>r.err), fixed=u.data.filter(r=>r.fix&&!r.drop),
+          dropped=u.data.filter(r=>r.drop), ok=u.data.filter(r=>!r.err&&!r.drop);
+    const rowHtml=r=>{
+      const cls=r.err?' class="err-row"':r.fix?' class="fix-row"':'';
+      return '<tr'+cls+'><td class="num mut">'+r.i+'</td><td class="nowrap">'+U.esc(r.code)+'</td>'+
+        '<td>'+U.esc(r.name)+'</td><td class="num">'+U.esc(r.price)+'</td>'+
+        '<td class="nowrap">'+U.esc(r.unit)+'</td><td class="nowrap mut">'+U.esc(r.date)+'</td>'+
+        '<td>'+(r.err?U.esc(r.err.t):r.drop?'<span class="mut">исключена: '+U.esc(r.fix)+'</span>'
+               :r.fix?'<span class="mut">'+U.esc(r.fix)+'</span>':'<span class="mut">принята</span>')+'</td>'+
+        '<td class="nowrap">'+(r.err
+          ? (r.err.fixable?'<button class="btn btn-sm" onclick="Upload.fix('+u.data.indexOf(r)+')">Исправить</button> ':'')+
+            '<button class="btn btn-sm" onclick="Upload.drop('+u.data.indexOf(r)+')">Исключить</button>'
+          : '')+'</td></tr>';
+    };
+    const list=u.data.slice().sort((a,b)=>(b.err?1:0)-(a.err?1:0));
+    U.el('upResult').innerHTML=
+      '<div class="sum">'+
+        '<div><b>'+u.data.length+'</b>строк в файле</div>'+
+        '<div><b>'+ok.length+'</b>принято</div>'+
+        '<div><b>'+fixed.length+'</b>исправлено</div>'+
+        '<div><b>'+dropped.length+'</b>исключено</div>'+
+        '<div><b>'+errs.length+'</b>ошибок не устранено</div>'+
+        '<div class="mut">Файл: '+U.esc(u.fname)+'</div>'+
+      '</div>'+
+      '<div class="panel"><div class="ph"><h2>Предпросмотр и контроль</h2><div class="sp"></div>'+
+        (errs.some(r=>r.err.fixable)?'<button class="btn btn-sm" onclick="Upload.fixAll();Upload.render()">Исправить все устранимые</button>':'')+
+        '<button class="btn btn-p btn-sm" onclick="Upload.commit()"'+(errs.length?' disabled':'')+'>Записать в базу</button>'+
+      '</div>'+
+      '<div class="tw" style="max-height:52vh"><table class="t"><thead><tr>'+
+        '<th class="num">Стр.</th><th>Код точки</th><th>Товар</th><th class="num">Цена</th>'+
+        '<th>Ед.</th><th>Дата наблюдения</th><th>Результат контроля</th><th>Действие</th>'+
+      '</tr></thead><tbody>'+list.map(rowHtml).join('')+'</tbody></table></div>'+
+      '<div style="padding:10px 14px;border-top:1px solid var(--line);font-size:12.5px">'+
+        'Загружено строк: '+u.data.length+' · приведено к единой единице измерения: '+fixed.length+
+        ' · ошибок: '+errs.length+
+        (errs.length?' · запись в базу недоступна до устранения ошибок':'')+'</div></div>';
+  },
+  commit(){
+    const u=ST.upload, ok=u.data.filter(r=>!r.drop).length;
+    Journal.add({obj:'Загрузка данных · '+u.fname, act:'Данные записаны в базу',
+      cmt:'Принято строк: '+ok+', исключено: '+u.data.filter(r=>r.drop).length});
+    Toast('Записано в базу: '+ok+' строк');
+    ST.upload=null; U.el('upResult').innerHTML='';
+  }
+};
+
+/* ===================== 4. СПРАВОЧНИКИ ===================== */
+const Ref={
+  init(){
+    U.el('rfDistrict').innerHTML='<option value="">все районы</option>'+
+      DISTRICTS.map(d=>'<option value="'+d.id+'">'+d.n+'</option>').join('');
+  },
+  tab(t){ ST.refTab=t;
+    document.querySelectorAll('.tabs [data-ref]').forEach(b=>b.classList.toggle('on',b.dataset.ref===t));
+    U.el('rfDistrictBox').hidden = t!=='pts';
+    this.render(); },
+  render(){
+    const q=U.el('rfSearch').value.trim().toLowerCase();
+    if(ST.refTab==='prod'){
+      U.el('rfHead').innerHTML='<th class="num">№</th><th>Наименование по форме Ц-101э</th><th>Ед.</th>'+
+        '<th class="num">Средняя по региону, нед. '+LAST_W+'</th>'+
+        '<th class="num">Изменение к нед. '+(LAST_W-1)+', %</th><th class="num">Наблюдений за неделю</th>';
+      const rows=PRODUCTS.filter(p=>!q||p.n.toLowerCase().includes(q));
+      U.el('rfBody').innerHTML=rows.map(p=>{
+        const w=regWow(ST.region,p.id);
+        return '<tr><td class="num mut">'+(p.idx+1)+'</td>'+
+          '<td class="cut" title="'+U.esc(p.n)+'">'+U.esc(p.n)+'</td>'+
+          '<td class="mut nowrap">'+p.u+'</td>'+
+          '<td class="num">'+U.n(regPrice(ST.region,p.id))+'</td>'+
+          '<td class="num dev '+(w>0?'up':w<0?'dn':'')+'">'+(w?U.sign(w):'0,0')+'</td>'+
+          '<td class="num mut">'+(ST.region===HOME?OBS.filter(o=>o.p===p.id).length:0)+'</td></tr>';
+      }).join('');
+      U.el('rfCount').textContent='Позиций в перечне: '+rows.length+' из '+PRODUCTS.length;
+    }else{
+      const fd=U.el('rfDistrict').value;
+      U.el('rfHead').innerHTML='<th>Код</th><th>Наименование</th><th>Формат</th><th>Район</th>'+
+        '<th>Адрес</th><th class="num">Наблюдений</th><th>Последняя передача</th><th>Состояние</th>';
+      if(ST.region!==HOME){
+        U.el('rfBody').innerHTML='<tr><td colspan="8"><div class="empty">Реестр торговых точек региона «'+
+          R_BY[ST.region].n+'» в систему не загружен.</div></td></tr>';
+        U.el('rfCount').textContent=''; return;
+      }
+      const rows=POINTS.filter(p=>(!fd||p.d===fd)&&
+        (!q||p.n.toLowerCase().includes(q)||p.id.toLowerCase().includes(q)));
+      const last=weekDates(LAST_W).e;
+      U.el('rfBody').innerHTML=rows.map(p=>{
+        const dt=new Date(last.getTime()-(2+p.lag)*864e5);
+        return '<tr'+(p.lag?' class="off"':'')+'><td class="nowrap">'+p.id+'</td>'+
+          '<td>'+U.esc(p.n)+'</td><td class="nowrap">'+p.kind+'</td>'+
+          '<td class="nowrap">'+D_BY[p.d].n+'</td><td class="nowrap">'+U.esc(p.addr)+'</td>'+
+          '<td class="num">'+OBS.filter(o=>o.pt===p.id).length+'</td>'+
+          '<td class="nowrap">'+U.d(dt)+'</td>'+
+          '<td class="nowrap">'+(p.lag
+            ? '<span class="st mid"><i></i>задержка '+p.lag+' дн.</span>'
+            : '<span class="st norm"><i></i>данные приняты</span>')+'</td></tr>';
+      }).join('');
+      U.el('rfCount').textContent='Торговых точек: '+rows.length+' из '+POINTS.length+
+        ' · районов: '+DISTRICTS.length;
+    }
+  },
+  csv(){
+    if(ST.refTab==='prod'){
+      csvDownload('перечень-СЗПТ.csv',[['№','Наименование','Единица','Средняя по региону, ₸','Изменение за неделю, %']]
+        .concat(PRODUCTS.map(p=>[p.idx+1,p.n,p.u,Math.round(regPrice(ST.region,p.id)),U.n1(regWow(ST.region,p.id))])));
+    }else{
+      csvDownload('реестр-торговых-точек.csv',[['Код','Наименование','Формат','Район','Адрес']]
+        .concat(POINTS.map(p=>[p.id,p.n,p.kind,D_BY[p.d].n,p.addr])));
+    }
+  }
+};
+</script>
+
+<script>
+'use strict';
+/* ===================== 5. ОТЧЁТЫ ===================== */
+/* Прогноз — модельная оценка: линейный тренд по 8 неделям наблюдений,
+   скорректированный на недельный индекс БНС. Данными наблюдения не является. */
+const MODEL_NOTE='Модельная оценка. Метод: линейный тренд средней цены по 8 неделям наблюдений, '+
+  'скорректированный на индекс к предыдущей неделе по данным БНС. Горизонт — 4 недели. '+
+  'Значение не является результатом наблюдения и не подлежит включению в отчётность о ценах.';
+
+function forecast(pid){
+  const base=regPrice(HOME,pid), w=regWow(HOME,pid);
+  const vals=DISTRICTS.map(d=>MED[d.id+'|'+pid]);
+  let slope=0;
+  vals.forEach(m=>{ slope+=(m[WEEKS-1]/m[0]-1)/(WEEKS-1); });
+  slope=slope/vals.length;                                  /* средний недельный темп */
+  const rate=(slope*0.6+w/100*0.4);
+  return {v:base*Math.pow(1+rate,4), rate:rate*100};
+}
+
+const REPORTS=[
+  {id:'weekly', n:'Еженедельная сводка цен на СЗПТ по региону', base:'Форма Ц-101э, выпуск БНС',
+   rows:()=>PRODUCTS.length},
+  {id:'dev',    n:'Отклонения цен от медианы района', base:'Наблюдения мониторинга акимата',
+   rows:()=>QUEUE.length},
+  {id:'checks', n:'Сведения о решениях по наблюдениям', base:'Журнал решений',
+   rows:()=>Journal.list.length},
+  {id:'fc',     n:'Оценка средних цен на 4 недели (модельная оценка)', base:'Расчёт по наблюдениям',
+   rows:()=>PRODUCTS.length},
+  {id:'obs',    n:'Выгрузка наблюдений за неделю', base:'Наблюдения мониторинга акимата',
+   rows:()=>OBS.length}
+];
+
+const Reports={
+  init(){},
+  render(){
+    U.el('rpWork').classList.toggle('wide', !ST.selReport);
+    U.el('rpBody').innerHTML=REPORTS.map(r=>
+      '<tr'+(ST.selReport===r.id?' class="sel"':'')+' onclick="Reports.open(\''+r.id+'\')">'+
+      '<td>'+r.n+(r.id==='fc'?' <span class="tag mdl" title="'+MODEL_NOTE+'">модельная оценка</span>':'')+'</td>'+
+      '<td class="nowrap">'+weekDates(ST.week).label+'</td>'+
+      '<td class="mut">'+r.base+'</td><td class="num">'+r.rows()+'</td></tr>').join('');
+    this.inspect();
+  },
+  open(id){ ST.selReport=ST.selReport===id?null:id; this.render(); },
+  data(id){
+    const wk=ST.week, i=WEEKS-1-(LAST_W-wk);
+    if(id==='weekly') return [['Наименование','Единица','Средняя по региону, ₸','Изменение к нед. '+(LAST_W-1)+', %','Медиана районов, ₸']]
+      .concat(PRODUCTS.map(p=>{ const s=Prices.stat(p.id);
+        return [p.n,p.u,Math.round(regPrice(ST.region,p.id)),U.n1(regWow(ST.region,p.id)),s?Math.round(s.med):'']; }));
+    if(id==='dev') return [['Товар','Код точки','Торговая точка','Район','Цена, ₸','Медиана района, ₸','Отклонение, %','Изменение за неделю, %','Уровень','Статус']]
+      .concat(QUEUE.map(q=>{ const v=obsView(q.o,wk), p=P_BY[q.o.p], pt=PT_BY[q.o.pt];
+        return [p.n,pt.id,pt.n,D_BY[q.o.d].n,Math.round(v.price),Math.round(v.med),
+                U.n1(v.dev),U.n1(v.wow),LEVEL[v.level],S_BY[q.st].n]; }));
+    if(id==='checks') return [['Дата и время','Пользователь','Объект','Решение','Комментарий']]
+      .concat(Journal.list.map(j=>[j.t,j.user,j.obj,j.act,j.cmt]));
+    if(id==='fc') return [['Наименование','Единица','Средняя по региону, ₸','Оценка через 4 недели, ₸','Темп, % в неделю','Примечание']]
+      .concat(PRODUCTS.map(p=>{ const f=forecast(p.id);
+        return [p.n,p.u,Math.round(regPrice(HOME,p.id)),Math.round(f.v),U.n1(f.rate),'модельная оценка']; }));
+    return [['Код точки','Товар','Район','Цена, ₸','Единица','Неделя']]
+      .concat(OBS.map(o=>[o.pt,P_BY[o.p].n,D_BY[o.d].n,Math.round(o.hist[i]),P_BY[o.p].u,wk]));
+  },
+  inspect(){
+    const box=U.el('rpInsp');
+    if(!ST.selReport){
+      box.innerHTML='<div class="sec"><h3>Отчётная форма</h3><p class="mut" style="font-size:12.5px;margin:0">'+
+        'Выберите форму, чтобы просмотреть первые строки и выгрузить её в CSV.</p></div>';
+      return;
+    }
+    const r=REPORTS.find(x=>x.id===ST.selReport), d=this.data(r.id);
+    const head=d[0], body=d.slice(1,9);
+    box.innerHTML='<div class="sec" style="display:flex;align-items:flex-start;gap:10px">'+
+      '<div><h3 style="margin:0 0 2px">'+r.n+'</h3>'+
+      '<div class="mut" style="font-size:12px">'+weekDates(ST.week).label+' · строк: '+(d.length-1)+'</div></div>'+
+      '<button class="close" onclick="Reports.open(\''+r.id+'\')" title="Закрыть">✕</button></div>'+
+      (r.id==='fc'?'<div class="sec"><p class="note" style="margin:0">'+MODEL_NOTE+'</p></div>':'')+
+      '<div class="sec"><h3>Предпросмотр</h3><div class="tw"><table class="t"><thead><tr>'+
+      head.map((h,i)=>'<th'+(i>1?' class="num"':'')+'>'+U.esc(h)+'</th>').join('')+'</tr></thead><tbody>'+
+      body.map(row=>'<tr>'+row.map((c,i)=>'<td'+(i>1?' class="num"':'')+'>'+U.esc(c)+'</td>').join('')+'</tr>').join('')+
+      '</tbody></table></div><p class="note">Показаны первые '+body.length+' строк из '+(d.length-1)+'.</p></div>'+
+      '<div class="sec"><div class="act">'+
+      '<button class="btn btn-p btn-sm" onclick="Reports.csv()">Выгрузить в CSV</button></div></div>';
+  },
+  csv(){
+    const r=REPORTS.find(x=>x.id===ST.selReport);
+    csvDownload(r.id+'-неделя-'+ST.week+'.csv', this.data(r.id));
+    Journal.add({obj:'Отчёт · '+r.n, act:'Отчёт сформирован', cmt:weekDates(ST.week).label});
+  }
+};
+
+/* ===================== 6. ЖУРНАЛ РЕШЕНИЙ ===================== */
+const KEY='bagaradar.journal.v1';
+const Journal={
+  list:[],
+  load(){
+    try{ const raw=localStorage.getItem(KEY); if(raw) this.list=JSON.parse(raw); }catch(e){}
+    if(!this.list.length) this.seed();
+  },
+  save(){ try{ localStorage.setItem(KEY,JSON.stringify(this.list)); }catch(e){} },
+  seed(){
+    /* исходные записи недели: решения, принятые до начала работы с системой */
+    const rnd=U.rng('journal|46'), out=[];
+    const acts=['В работе','Направлен на проверку','Обосновано','Ошибка данных'];
+    const base=weekDates(LAST_W).s.getTime();
+    QUEUE.filter(q=>q.st!=='new').slice(0,14).forEach((q,i)=>{
+      const p=P_BY[q.o.p], pt=PT_BY[q.o.pt];
+      const t=new Date(base+(1+Math.floor(rnd()*4))*864e5+(9+Math.floor(rnd()*8))*36e5+Math.floor(rnd()*60)*6e4);
+      out.push({t:U.dt(t), user:q.owner||STAFF[1], obj:p.n+' · '+pt.n+' ('+pt.id+')',
+        act:S_BY[q.st]?S_BY[q.st].n:acts[i%4],
+        cmt:q.st==='just'?'Отклонение обосновано форматом торговли и объёмом поставки.'
+           :q.st==='error'?'Ошибка в единице измерения при передаче данных, строка исправлена.'
+           :q.st==='sent'?'Направлено в отдел торговли для выездной проверки.'
+           :'Запрошены документы по формированию цены.'});
+    });
+    out.push({t:U.dt(new Date(base+864e5+9*36e5+12*6e4)), user:STAFF[3],
+      obj:'Загрузка данных · выгрузка-район-45.csv', act:'Данные записаны в базу',
+      cmt:'Принято строк: 1 426, исключено: 11'});
+    out.sort((a,b)=>a.t<b.t?1:-1);
+    this.list=out; this.save();
+  },
+  add(rec){
+    this.list.unshift({t:U.dt(new Date()), user:ME, obj:rec.obj, act:rec.act, cmt:rec.cmt||''});
+    this.save();
+    if(ST.screen==='journal') this.render();
+  },
+  init(){
+    const acts=[...new Set(this.list.map(j=>j.act))];
+    U.el('jrAct').innerHTML='<option value="">все</option>'+
+      acts.map(a=>'<option value="'+U.esc(a)+'">'+U.esc(a)+'</option>').join('');
+  },
+  rows(){
+    const q=U.el('jrSearch').value.trim().toLowerCase(), a=U.el('jrAct').value;
+    return this.list.filter(j=>{
+      if(a && j.act!==a) return false;
+      if(q && !((j.obj+' '+j.act+' '+j.cmt+' '+j.user).toLowerCase().includes(q))) return false;
+      return true;
+    });
+  },
+  render(){
+    const rows=this.rows();
+    U.el('jrBody').innerHTML = rows.length ? rows.map(j=>
+      '<tr><td class="nowrap tnum">'+j.t+'</td><td class="nowrap">'+U.esc(j.user)+'</td>'+
+      '<td>'+U.esc(j.obj)+'</td><td class="nowrap">'+U.esc(j.act)+'</td>'+
+      '<td class="mut">'+U.esc(j.cmt)+'</td></tr>').join('')
+      : '<tr><td colspan="5"><div class="empty">Записей, отвечающих условиям отбора, нет.</div></td></tr>';
+    U.el('jrCount').textContent='Записей: '+rows.length+' из '+this.list.length;
+  },
+  csv(){ csvDownload('журнал-решений.csv',[['Дата и время','Пользователь','Объект','Решение','Комментарий']]
+    .concat(this.list.map(j=>[j.t,j.user,j.obj,j.act,j.cmt]))); }
+};
+
+/* ===================== ОБРАЩЕНИЯ ГРАЖДАН ===================== */
+/* Обращения принимает локальная служба relay.py и передаёт их в Telegram.
+   Если служба не запущена, раздел показывает соответствующее состояние. */
+const Appeals={
+  items:[], err:'',
+  load(){
+    fetch('/api/complaints',{cache:'no-store'})
+      .then(r=>r.ok?r.json():Promise.reject(new Error('служба приёма обращений недоступна')))
+      .then(j=>{ this.items=j.items||[]; this.err=''; this.render(); })
+      .catch(e=>{ this.items=[]; this.err=e.message; this.render(); });
+  },
+  render(){
+    const b=U.el('apBody');
+    if(this.err){
+      b.innerHTML='<tr><td colspan="9"><div class="empty">Раздел недоступен: '+U.esc(this.err)+'.<br>'+
+        'Запустите локальную службу: <code>python3 relay.py</code></div></td></tr>';
+      U.el('apCount').textContent=''; return;
+    }
+    if(!this.items.length){
+      b.innerHTML='<tr><td colspan="9"><div class="empty">Обращений за период не поступало.</div></td></tr>';
+      U.el('apCount').textContent='Записей: 0'; return;
+    }
+    b.innerHTML=this.items.map(a=>
+      '<tr><td class="nowrap tnum">'+U.esc(a.ts)+'</td><td class="nowrap">'+U.esc(a.region)+'</td>'+
+      '<td class="cut" title="'+U.esc(a.product)+'">'+U.esc(a.product)+'</td>'+
+      '<td class="cut-s">'+U.esc(a.point)+'</td>'+
+      '<td class="num">'+U.esc(a.price)+' <span class="mut">'+U.esc(a.unit||'')+'</span></td>'+
+      '<td class="nowrap">'+(a.photo?'фотография ценника':'<span class="mut">не приложен</span>')+'</td>'+
+      '<td class="nowrap">'+(a.sent
+        ? '<span class="st norm"><i></i>передано</span>'
+        : '<span class="st mid"><i></i>не передано</span>')+'</td>'+
+      '<td class="cut-s mut" title="'+U.esc(a.note||'')+'">'+U.esc(a.note||'')+'</td>'+
+      '<td class="nowrap mut">'+U.esc(a.contact||'')+'</td></tr>').join('');
+    U.el('apCount').textContent='Записей: '+this.items.length+
+      ' · передано в Telegram: '+this.items.filter(a=>a.sent).length;
+  },
+  csv(){ csvDownload('обращения-граждан.csv',
+    [['Дата и время','Регион','Товар','Торговая точка','Цена','Единица','Материал','Передано','Пояснение','Обратная связь']]
+    .concat(this.items.map(a=>[a.ts,a.region,a.product,a.point,a.price,a.unit,
+      a.photo?'фотография ценника':'',a.sent?'да':'нет',a.note||'',a.contact||'']))); }
+};
+
+/* ===================== запуск ===================== */
+App.init();
+Fx.start();
+</script>

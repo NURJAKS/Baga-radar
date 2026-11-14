@@ -1,0 +1,192 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Обращение по цене</title>
+<!--
+  Форма обращения гражданина по цене на социально значимый продовольственный товар.
+  Обращение с фотографией ценника передаётся в Telegram через локальный сервис relay.py
+  (адрес /api/complaint). Токен бота хранится в .env на стороне сервиса и в эту
+  страницу не попадает.
+-->
+<style>
+:root{--bg:#F6F3EC;--surface:#fff;--line:#E0DBD0;--ink:#1C1A16;--ink-2:#55504A;--muted:#7E776D;
+  --accent:#1F4E79;--red:#B3261E;--green:#1E6B3A;
+  --font:'Inter','IBM Plex Sans',system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);font-size:14px;line-height:1.45}
+.wrap{max-width:760px;margin:0 auto;padding:20px 16px 40px}
+header{background:var(--surface);border-bottom:1px solid var(--line);padding:12px 0}
+header .wrap{padding:0 16px}
+header b{font-size:15px;font-weight:600;display:block}
+header span{font-size:12px;color:var(--muted)}
+h1{font-size:17px;font-weight:600;margin:20px 0 4px}
+p.sub{margin:0 0 16px;font-size:13px;color:var(--ink-2)}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:4px}
+.pb{padding:16px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px 14px}
+@media(max-width:620px){.grid{grid-template-columns:1fr}}
+.f{display:flex;flex-direction:column;gap:4px}
+.f.full{grid-column:1/-1}
+label{font-size:12px;color:var(--muted)}
+input,select,textarea{background:var(--surface);border:1px solid var(--line);border-radius:4px;
+  padding:7px 9px;font:inherit;font-size:13.5px;color:var(--ink);outline:none;width:100%}
+input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+textarea{min-height:64px;resize:vertical}
+.btn{background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:8px 14px;
+  font:inherit;font-size:13.5px;cursor:pointer}
+.btn-p{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn-p:hover{background:#19406A}
+.btn:disabled{color:var(--muted);background:#F6F3EC;cursor:default}
+.drop{display:block;border:1px dashed var(--line);border-radius:4px;background:#FBF9F3;padding:18px;
+  text-align:center;cursor:pointer;font-size:13px;color:var(--ink-2)}
+.drop:hover{border-color:var(--accent)}
+.drop img{max-width:100%;max-height:180px;display:block;margin:0 auto 8px;border-radius:3px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.ref{font-size:12.5px;color:var(--ink-2);border-left:2px solid var(--line);padding-left:10px;margin-top:6px;
+  font-variant-numeric:tabular-nums}
+.res{margin-top:16px;border:1px solid var(--line);border-radius:4px;padding:12px 14px;font-size:13px;background:var(--surface)}
+.res.ok{border-left:3px solid var(--green)}
+.res.err{border-left:3px solid var(--red)}
+.res b{display:block;font-weight:600;margin-bottom:3px}
+.note{font-size:11.5px;color:var(--muted)}
+footer{padding:16px;color:var(--muted);font-size:11.5px;text-align:center}
+</style>
+
+<header><div class="wrap"><b>Баға Радар</b>
+  <span>Приём обращений по ценам на социально значимые продовольственные товары</span></div></header>
+
+<div class="wrap">
+  <h1>Обращение по цене</h1>
+  <p class="sub">Укажите товар, торговую точку и цену на ценнике. К обращению приложите фотографию
+     ценника — она является подтверждающим материалом при проверке. Обращение поступает специалисту
+     отдела внутренней торговли.</p>
+
+  <div class="panel"><div class="pb">
+    <div class="grid">
+      <div class="f"><label for="region">Регион</label><select id="region"></select></div>
+      <div class="f"><label for="product">Товар</label><select id="product"></select></div>
+      <div class="f"><label for="point">Торговая точка</label>
+        <input type="text" id="point" placeholder="наименование и адрес"></div>
+      <div class="f"><label for="price">Цена на ценнике</label>
+        <input type="text" id="price" inputmode="decimal" placeholder="например, 640"></div>
+      <div class="f full" id="refBox"></div>
+      <div class="f full"><label for="note">Пояснение</label>
+        <textarea id="note" placeholder="при необходимости"></textarea></div>
+      <div class="f full"><label for="contact">Обратная связь (необязательно)</label>
+        <input type="text" id="contact" placeholder="телефон или адрес электронной почты"></div>
+      <div class="f full">
+        <label>Фотография ценника</label>
+        <label class="drop" for="photo" id="drop">Выберите файл или сделайте снимок</label>
+        <input type="file" id="photo" class="sr" accept="image/*" onchange="pickPhoto(this)">
+        <span class="note">Фотография уменьшается до 1600 точек по длинной стороне и передаётся
+          вместе с обращением. Иные сведения о вас не собираются.</span>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;margin-top:14px;flex-wrap:wrap">
+      <button class="btn btn-p" id="send" onclick="send()">Отправить обращение</button>
+      <span class="note" id="hint"></span>
+    </div>
+    <div id="res"></div>
+  </div></div>
+
+  <footer>Данные демонстрационные. Обращение передаётся в служебный канал отдела внутренней торговли.</footer>
+</div>
+
+<script>
+'use strict';
+let DATA=null, PHOTO=null;
+
+const REGIONS=[['abay','Абайская область'],['akmola','Акмолинская область'],['aktobe','Актюбинская область'],
+['almaty_o','Алматинская область'],['atyrau','Атырауская область'],['vko','Восточно-Казахстанская область'],
+['zhambyl','Жамбылская область'],['zhetysu','Жетысуская область'],['wko','Западно-Казахстанская область'],
+['karaganda','Карагандинская область'],['kostanay','Костанайская область'],['kyzylorda','Кызылординская область'],
+['mangystau','Мангистауская область'],['pavlodar','Павлодарская область'],['sko','Северо-Казахстанская область'],
+['turkestan','Туркестанская область'],['ulytau','Улытауская область'],['astana','город Астана'],
+['almaty_c','город Алматы'],['shymkent','город Шымкент']];
+
+const n=(v,d)=>new Intl.NumberFormat('ru-RU',{minimumFractionDigits:d||0,maximumFractionDigits:d||0}).format(v);
+
+function init(){
+  document.getElementById('region').innerHTML=REGIONS.map(r=>
+    '<option value="'+r[0]+'"'+(r[0]==='kyzylorda'?' selected':'')+'>'+r[1]+'</option>').join('');
+  fetch('prices-real.json',{cache:'no-store'}).then(r=>r.json()).then(j=>{
+    DATA=j;
+    document.getElementById('product').innerHTML=j.order.map(pid=>
+      '<option value="'+pid+'">'+j.products[pid]+'</option>').join('');
+    ['region','product','price'].forEach(id=>document.getElementById(id).addEventListener('input',ref));
+    ref();
+  }).catch(()=>{ document.getElementById('refBox').innerHTML=
+    '<span class="note">Справочные цены недоступны: перечень товаров не загружен.</span>'; });
+}
+
+/* справка: средняя цена по региону из выпуска БНС и отклонение указанной цены */
+function ref(){
+  if(!DATA) return;
+  const reg=document.getElementById('region').value, pid=document.getElementById('product').value;
+  const avg=DATA.prices[reg+'|'+pid], unit=DATA.units[pid];
+  const p=parseFloat(String(document.getElementById('price').value).replace(',','.'));
+  const d=DATA.published.split('-');
+  let h='Средняя цена по региону: <b>'+(avg?n(avg)+' '+unit:'нет данных')+'</b>'+
+        ' · выпуск Бюро национальной статистики от '+d[2]+'.'+d[1]+'.'+d[0];
+  if(avg&&p>0){
+    const dev=(p/avg-1)*100;
+    h+='<br>Указанная цена отличается от средней на '+(dev>0?'+':'−')+n(Math.abs(dev),1)+' %';
+  }
+  document.getElementById('refBox').innerHTML='<div class="ref">'+h+'</div>';
+}
+
+/* уменьшение снимка до 1600 точек по длинной стороне */
+function pickPhoto(inp){
+  const f=inp.files&&inp.files[0]; if(!f) return;
+  const img=new Image();
+  img.onload=()=>{
+    const k=Math.min(1,1600/Math.max(img.width,img.height));
+    const c=document.createElement('canvas');
+    c.width=Math.round(img.width*k); c.height=Math.round(img.height*k);
+    c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+    PHOTO=c.toDataURL('image/jpeg',0.85);
+    document.getElementById('drop').innerHTML='<img src="'+PHOTO+'" alt="Фотография ценника">'+
+      'Файл: '+f.name.replace(/</g,'')+' · нажмите, чтобы заменить';
+    URL.revokeObjectURL(img.src);
+  };
+  img.src=URL.createObjectURL(f);
+}
+
+function show(cls,title,text){
+  document.getElementById('res').innerHTML='<div class="res '+cls+'"><b>'+title+'</b>'+text+'</div>';
+}
+
+function send(){
+  const reg=document.getElementById('region'), pr=document.getElementById('product');
+  const price=document.getElementById('price').value.trim();
+  const point=document.getElementById('point').value.trim();
+  if(!point){ show('err','Не указана торговая точка','Укажите наименование и адрес торговой точки.'); return; }
+  if(!price){ show('err','Не указана цена','Укажите цену, указанную на ценнике.'); return; }
+  if(!PHOTO){ show('err','Не приложена фотография','Приложите фотографию ценника — без неё обращение не рассматривается.'); return; }
+
+  const btn=document.getElementById('send'); btn.disabled=true;
+  document.getElementById('hint').textContent='Отправка…';
+  fetch('/api/complaint',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      region:reg.options[reg.selectedIndex].text,
+      product:pr.options[pr.selectedIndex].text,
+      point:point, price:price,
+      unit:DATA?DATA.units[pr.value]:'',
+      note:document.getElementById('note').value.trim(),
+      contact:document.getElementById('contact').value.trim(),
+      photo:PHOTO
+    })})
+    .then(r=>r.json().then(j=>({ok:r.ok,j:j})))
+    .then(({ok,j})=>{
+      if(!ok) throw new Error(j.error||'ошибка службы приёма обращений');
+      if(j.sent) show('ok','Обращение принято и передано в служебный канал',
+        'Дата регистрации: '+j.ts+'. Фотография ценника приложена.');
+      else show('err','Обращение зарегистрировано, передача в Telegram не выполнена',
+        'Обращение сохранено в журнале службы приёма (дата регистрации: '+j.ts+'). '+
+        'Причина, по которой оно не передано: '+(j.error||'передача не настроена')+'.');
+    })
+    .catch(e=>show('err','Обращение не отправлено',
+      'Служба приёма обращений недоступна ('+e.message+'). Запустите relay.py и повторите отправку.'))
+    .finally(()=>{ btn.disabled=false; document.getElementById('hint').textContent=''; });
+}
+init();
+</script>
