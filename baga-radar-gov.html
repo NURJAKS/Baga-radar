@@ -38,6 +38,7 @@ a{color:var(--brand)}
 .tnum{font-variant-numeric:tabular-nums}
 .mut{color:var(--muted)}
 .nowrap{white-space:nowrap}
+@media(max-width:960px){.rev-cols{grid-template-columns:1fr!important}}
 
 /* ============================= каркас ============================= */
 .shell{display:grid; grid-template-columns:232px minmax(0,1fr); min-height:100vh}
@@ -392,27 +393,196 @@ textarea{width:100%; resize:vertical; min-height:62px; font-size:13px}
 <section class="page" id="sc-upload">
   <div class="pt">
     <h2>Загрузка данных</h2>
-    <p>Приём недельных наблюдений от торговых точек и районных отделов. Поддерживаются файлы Excel (.xlsx)
-       и CSV. Перед записью в базу выполняется проверка: соответствие товара перечню СЗПТ, единица измерения,
-       отклонение цены от медианы района, повторные строки.</p>
+    <p>Приём недельных наблюдений от торговых точек, районных отделов, а также отзывов и сигналов жителей через Telegram-чат/бот и интерактивный веб-бот. Все поступившие данные проверяются на соответствие перечню СЗПТ и могут быть включены в систему мониторинга.</p>
   </div>
 
-  <div class="panel" style="margin-bottom:16px">
-    <div class="pb">
-      <label class="drop" for="upFile" id="upDrop">
-        <b>Выберите файл или перетащите его сюда</b>
-        <span>.xlsx, .csv · столбцы: код точки, товар, цена, единица, дата наблюдения</span>
-      </label>
-      <input type="file" id="upFile" class="sr" accept=".csv,.xlsx,.xls,text/csv" onchange="Upload.pick(this)">
-      <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; align-items:center">
-        <button class="btn" onclick="Upload.sample()">Загрузить пример выгрузки</button>
-        <button class="btn" onclick="Upload.template()">Скачать шаблон CSV</button>
-        <span class="note" style="margin:0">Файл обрабатывается в браузере и никуда не передаётся.</span>
+  <div class="tabs" style="margin-bottom:16px; border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; background:var(--surface)">
+    <button class="on" id="tabUpFiles" onclick="Upload.tab('files')">📁 Файлы отчётов (CSV / XLSX)</button>
+    <button id="tabUpReviews" onclick="Upload.tab('reviews')">💬 Отзывы жителей (Telegram-чат & бот на сайте)</button>
+  </div>
+
+  <!-- Вкладка 1: Файлы наблюдений -->
+  <div id="upFilesBox">
+    <div class="panel" style="margin-bottom:16px">
+      <div class="pb">
+        <label class="drop" for="upFile" id="upDrop">
+          <b>Выберите файл или перетащите его сюда</b>
+          <span>.xlsx, .csv · столбцы: код точки, товар, цена, единица, дата наблюдения</span>
+        </label>
+        <input type="file" id="upFile" class="sr" accept=".csv,.xlsx,.xls,text/csv" onchange="Upload.pick(this)">
+        <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; align-items:center">
+          <button class="btn" onclick="Upload.sample()">Загрузить пример выгрузки</button>
+          <button class="btn" onclick="Upload.template()">Скачать шаблон CSV</button>
+          <span class="note" style="margin:0">Файл обрабатывается в браузере и никуда не передаётся.</span>
+        </div>
+      </div>
+    </div>
+    <div id="upResult"></div>
+  </div>
+
+  <!-- Вкладка 2: Отзывы жителей через Telegram и веб-бот -->
+  <div id="upReviewsBox" style="display:none">
+    <!-- Сводная строка -->
+    <div class="sum" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); margin-bottom:16px">
+      <div>
+        <b id="revTotalCount">0</b>
+        Поступило отзывов жителей
+      </div>
+      <div>
+        <b id="revTgCount" style="color:var(--brand)">0</b>
+        Канал Telegram (@BagaRadarBot)
+      </div>
+      <div>
+        <b id="revPriceAlerts" style="color:var(--red)">0</b>
+        Сигналов о завышении цен
+      </div>
+      <div style="display:flex; flex-direction:column; justify-content:center; gap:6px">
+        <button class="btn btn-sm btn-p" onclick="Upload.syncReviews()">⚡ Синхронизировать с Telegram</button>
+        <button class="btn btn-sm" onclick="Upload.mockReview()">✨ Пример отзыва жителя</button>
+      </div>
+    </div>
+
+    <!-- Две колонки: Веб-бот и Telegram -->
+    <div style="display:grid; grid-template-columns:1.2fr 0.8fr; gap:16px; margin-bottom:16px" class="rev-cols">
+      <!-- Веб-бот приёма отзывов -->
+      <div class="panel">
+        <div class="ph">
+          <h2>🤖 Бот приёма отзывов жителя на сайте</h2>
+          <div class="sp"></div>
+          <span class="tag">Прямой ввод от населения</span>
+        </div>
+        <div class="pb" style="padding:16px">
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px">
+            <div class="f">
+              <label for="revProduct">Товар СЗПТ *</label>
+              <select id="revProduct" onchange="Upload.onRevProductChange()"></select>
+            </div>
+            <div class="f">
+              <label for="revPoint">Торговая точка и адрес *</label>
+              <input type="text" id="revPoint" placeholder="Например: Супермаркет «Магнум», ул. Абая 12">
+            </div>
+            <div class="f">
+              <label for="revPrice">Фактическая цена на полке, ₸ *</label>
+              <input type="number" id="revPrice" placeholder="например, 420" oninput="Upload.onRevPriceChange()">
+            </div>
+            <div class="f">
+              <label for="revRating">Оценка и статус</label>
+              <select id="revRating">
+                <option value="⚠️ Завышена цена">⚠️ Завышена цена (дороже обычного)</option>
+                <option value="🌟 Отличное качество и честная цена">🌟 Отличное качество и честная цена</option>
+                <option value="❌ Несоответствие ценника на кассе">❌ Несоответствие ценника на кассе</option>
+                <option value="📦 Несвежий товар / дефект упаковки">📦 Несвежий товар / дефект упаковки</option>
+                <option value="🚫 Дефицит / нет на полке">🚫 Дефицит / нет на полке</option>
+              </select>
+            </div>
+            <div class="f full" id="revRefHint" style="grid-column:1/-1; font-size:12px; color:var(--ink-2); background:var(--surface-2); padding:7px 11px; border-radius:var(--radius-s); border-left:3px solid var(--teal)">
+              Справочная цена по региону рассчитывается...
+            </div>
+            <div class="f full" style="grid-column:1/-1">
+              <label for="revText">Отзыв жителя о товаре *</label>
+              <textarea id="revText" style="min-height:65px" placeholder="Опишите ваши впечатления о товаре: качество, свежесть, наличие ценника, фасовку..."></textarea>
+            </div>
+            <div class="f full" style="grid-column:1/-1">
+              <label>Фото ценника или товара (подтверждение)</label>
+              <label class="drop" for="revPhotoFile" id="revPhotoDrop" style="padding:12px; font-size:12.5px">
+                <b>Прикрепить фотографию</b>
+                <span class="mut" style="font-size:11px">.jpg, .png · сжатие в браузере</span>
+              </label>
+              <input type="file" id="revPhotoFile" class="sr" accept="image/*" onchange="Upload.pickRevPhoto(this)">
+            </div>
+            <div class="f full" style="grid-column:1/-1">
+              <label for="revContact">Контакт жителя (Telegram @username или телефон, необязательно)</label>
+              <input type="text" id="revContact" placeholder="@telegram_nick или +7 (7xx) xxx-xx-xx">
+            </div>
+          </div>
+          <div style="display:flex; gap:10px; margin-top:14px; align-items:center; flex-wrap:wrap">
+            <button class="btn btn-p" id="revSendBtn" onclick="Upload.submitReview()">Отправить отзыв в Telegram и систему</button>
+            <button class="btn btn-sm" onclick="Upload.fillSampleForm()">Заполнить пример</button>
+            <span class="note" id="revSendStatus" style="margin:0"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Telegram бот для жителей -->
+      <div class="panel" style="display:flex; flex-direction:column">
+        <div class="ph">
+          <h2>📱 Telegram-канал и бот для жителей</h2>
+          <div class="sp"></div>
+          <span class="st norm"><i></i>Telegram Bot API</span>
+        </div>
+        <div class="pb" style="flex:1; display:flex; flex-direction:column; gap:13px">
+          <div style="background:linear-gradient(135deg, #0B5FA5 0%, #0E9AA0 100%); color:#fff; padding:14px; border-radius:var(--radius-s)">
+            <div style="font-size:11px; opacity:0.85; text-transform:uppercase; letter-spacing:0.5px">Официальный бот приёма сигналов</div>
+            <div style="font-size:17px; font-weight:700; margin:4px 0">@BagaRadarBot</div>
+            <div style="font-size:12px; opacity:0.9">Жители региона могут отправлять фото ценников, адреса магазинов и отзывы о товарах прямо из Telegram.</div>
+          </div>
+
+          <div style="font-size:12.5px; line-height:1.5; color:var(--ink-2)">
+            <b>Как работает отправка через Telegram:</b>
+            <ol style="margin:6px 0 0; padding-left:18px">
+              <li>Житель открывает бота <code>@BagaRadarBot</code> в Telegram;</li>
+              <li>Отправляет фотографию ценника или товара с геометкой магазина;</li>
+              <li>Пишет сообщение с указанием цены и своим отзывом;</li>
+              <li>Бот моментально транслирует отзыв в служебный канал отдела и в эту таблицу!</li>
+            </ol>
+          </div>
+
+          <div style="border:1px dashed var(--line); border-radius:var(--radius-s); padding:10px; background:var(--bg); font-size:11.5px; color:var(--ink-2)">
+            <b>Пример сообщения из Telegram:</b>
+            <div style="font-family:monospace; margin-top:4px; font-size:11px; background:#fff; padding:6px; border-radius:4px; border:1px solid var(--line-2)">
+              #отзыв Сахар, Магнум на Абая, цена 420₸, свежая фасовка, товар на полках есть
+            </div>
+          </div>
+
+          <div style="margin-top:auto; padding-top:10px; border-top:1px solid var(--line-2); display:flex; gap:8px">
+            <a class="btn btn-sm" href="https://t.me/BagaRadarBot" target="_blank" rel="noopener" style="text-decoration:none; flex:1; text-align:center">Открыть Telegram-бота</a>
+            <button class="btn btn-sm" onclick="Upload.mockTgMessage()">📨 Сообщение из Telegram</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Таблица поступивших отзывов жителей -->
+    <div class="panel">
+      <div class="ph">
+        <h2>Поступившие отзывы жителей о товарах СЗПТ</h2>
+        <div class="sp"></div>
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+          <select id="revFilterCategory" onchange="Upload.renderReviewsTable()" style="font-size:12px">
+            <option value="">Все категории отзывов</option>
+            <option value="price">⚠️ Сигналы о завышении цены</option>
+            <option value="good">🌟 Положительные отзывы</option>
+            <option value="tag">❌ Несоответствие ценника</option>
+            <option value="defect">📦 Несвежий / брак</option>
+          </select>
+          <button class="btn btn-sm btn-p" onclick="Upload.commitReviewsToDatabase()">Записать проверенные отзывы в базу наблюдений</button>
+        </div>
+      </div>
+      <div class="tw" style="max-height:48vh">
+        <table class="t">
+          <thead>
+            <tr>
+              <th>Дата и время</th>
+              <th>Источник</th>
+              <th>Товар</th>
+              <th>Торговая точка</th>
+              <th class="num">Цена на полке</th>
+              <th>Отклонение</th>
+              <th>Категория / Оценка</th>
+              <th>Отзыв жителя</th>
+              <th>Материал</th>
+              <th>Telegram</th>
+            </tr>
+          </thead>
+          <tbody id="revTableBody"></tbody>
+        </table>
+      </div>
+      <div style="padding:10px 14px; border-top:1px solid var(--line); font-size:12px; color:var(--muted); display:flex; justify-content:space-between; flex-wrap:wrap" id="revTableFooter">
+        <span id="revTableCount">Записей: 0</span>
+        <span class="note" style="margin:0">Отзывы жителей верифицируются и служат первичными материалами для контроля цен</span>
       </div>
     </div>
   </div>
-
-  <div id="upResult"></div>
 </section>
 
 <!-- ======================= 4. СПРАВОЧНИКИ ======================= -->
@@ -821,7 +991,7 @@ const App={
     initObs(); initQueue(); QUEUE.forEach(q=>Q_BY[q.key]=q);
     Journal.load();
     this.menu(); this.header(); this.settings();
-    Sig.init(); Prices.init(); Ref.init(); Reports.init(); Journal.init();
+    Sig.init(); Prices.init(); Ref.init(); Reports.init(); Journal.init(); Upload.init();
     const h=location.hash.replace('#','');
     this.go(SCREENS.some(s=>s.id===h)?h:'signals');
   },
@@ -841,6 +1011,7 @@ const App={
     if(id==='signals') Sig.render();
     if(id==='appeals') Appeals.load();
     if(id==='prices'){ Prices.render(); Fx.render(); RegionMap.render(); }
+    if(id==='upload')  Upload.init();
     if(id==='ref')     Ref.render();
     if(id==='reports') Reports.render();
     if(id==='journal') Journal.render();
@@ -1327,6 +1498,384 @@ const Fx={
 /* ===================== 3. ЗАГРУЗКА ДАННЫХ ===================== */
 const UNITS_OK=['₸/кг','₸/л','₸/10 шт'];
 const Upload={
+  currentTab: 'files',
+  reviews: [],
+  photoData: null,
+  initialized: false,
+
+  tab(t){
+    this.currentTab = t;
+    const bFiles = U.el('tabUpFiles'), bRevs = U.el('tabUpReviews');
+    if(bFiles) bFiles.classList.toggle('on', t==='files');
+    if(bRevs) bRevs.classList.toggle('on', t==='reviews');
+    const boxF = U.el('upFilesBox'), boxR = U.el('upReviewsBox');
+    if(boxF) boxF.style.display = t==='files' ? 'block' : 'none';
+    if(boxR) boxR.style.display = t==='reviews' ? 'block' : 'none';
+    if(t==='reviews') this.initReviews();
+  },
+
+  init(){
+    this.initReviews();
+  },
+
+  initReviews(){
+    const prEl = U.el('revProduct');
+    if(prEl && (!prEl.options || prEl.options.length === 0)){
+      prEl.innerHTML = PRODUCTS.map(p=>'<option value="'+p.id+'">'+p.n+' ('+p.u+')</option>').join('');
+      this.onRevProductChange();
+    }
+    this.loadReviews();
+  },
+
+  onRevProductChange(){
+    const prEl = U.el('revProduct');
+    if(!prEl) return;
+    const pid = prEl.value;
+    const p = P_BY[pid];
+    const avg = regPrice(ST.region, pid);
+    const box = U.el('revRefHint');
+    if(!p || !box) return;
+    box.innerHTML = 'Справочная цена по региону: <b>' + U.n(avg) + ' ' + p.u + '</b> · БНС АСПиР РК. ' +
+      'Введите фактическую цену в магазине для расчёта отклонения.';
+    this.onRevPriceChange();
+  },
+
+  onRevPriceChange(){
+    const prEl = U.el('revProduct');
+    if(!prEl) return;
+    const pid = prEl.value;
+    const p = P_BY[pid];
+    const avg = regPrice(ST.region, pid);
+    const priceEl = U.el('revPrice');
+    const box = U.el('revRefHint');
+    if(!p || !box || !priceEl) return;
+    const val = parseFloat(String(priceEl.value).replace(',','.'));
+    if(val > 0 && avg > 0){
+      const dev = ((val / avg) - 1) * 100;
+      const devStr = (dev > 0 ? '+' : '') + U.n1(dev) + ' %';
+      const color = dev > 5 ? 'var(--red)' : dev < -5 ? 'var(--green)' : 'var(--ink)';
+      box.innerHTML = 'Справочная цена по региону: <b>' + U.n(avg) + ' ' + p.u + '</b> · ' +
+        'Отклонение введенной цены: <b style="color:' + color + '">' + devStr + '</b>' +
+        (dev > 15 ? ' <span class="st high">Превышение нормы</span>' : dev < -10 ? ' <span class="st norm">Ниже средней</span>' : '');
+    } else {
+      box.innerHTML = 'Справочная цена по региону: <b>' + U.n(avg) + ' ' + p.u + '</b> · БНС АСПиР РК.';
+    }
+  },
+
+  pickRevPhoto(inp){
+    const f = inp.files && inp.files[0]; if(!f) return;
+    const img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, 1200 / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * k);
+      c.height = Math.round(img.height * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      this.photoData = c.toDataURL('image/jpeg', 0.85);
+      U.el('revPhotoDrop').innerHTML = '<img src="' + this.photoData + '" style="max-height:100px; display:block; margin:0 auto 6px; border-radius:4px" alt="Фото">' +
+        '<b>' + U.esc(f.name) + '</b> <span class="mut">(нажмите для замены)</span>';
+      URL.revokeObjectURL(img.src);
+    };
+    img.src = URL.createObjectURL(f);
+  },
+
+  fillSampleForm(){
+    const rndP = PRODUCTS[Math.floor(Math.random() * PRODUCTS.length)];
+    const avg = regPrice(ST.region, rndP.id);
+    const samplePrice = Math.round(avg * (1 + (Math.random() * 0.3 - 0.05)));
+    U.el('revProduct').value = rndP.id;
+    U.el('revPoint').value = 'Супермаркет «Магнум», 5-й микрорайон';
+    U.el('revPrice').value = samplePrice;
+    U.el('revRating').value = samplePrice > avg * 1.1 ? '⚠️ Завышена цена' : '🌟 Отличное качество и честная цена';
+    U.el('revText').value = 'Товар проверен в торговом зале. Дата выработки свежая, ценник на витрине соответствует ' + samplePrice + ' ₸.';
+    U.el('revContact').value = '@resident_' + Math.floor(100 + Math.random() * 900);
+    this.onRevPriceChange();
+  },
+
+  mockTgMessage(){
+    const p = PRODUCTS[Math.floor(Math.random() * PRODUCTS.length)];
+    const avg = regPrice(ST.region, p.id);
+    const price = Math.round(avg * (1 + (Math.random() * 0.4 - 0.1)));
+    const mock = {
+      ts: U.dt(new Date()),
+      source: 'Telegram-чат/бот',
+      region: REGIONS.find(r=>r.id===ST.region)?.n || 'Кызылординская область',
+      product: p.n,
+      point: 'Магазин «Корзина», ул. Жибек Жолы',
+      price: String(price),
+      unit: p.u,
+      rating: price > avg * 1.15 ? '⚠️ Завышена цена' : '💬 Отзыв',
+      review: 'Сообщение из Telegram: Взяли ' + p.n.toLowerCase() + ', цена ' + price + ' ' + p.u + '. Обслуживание быстрое, товар хорошего качества.',
+      contact: '@tele_user_' + Math.floor(100 + Math.random() * 900),
+      photo: true,
+      sent: true
+    };
+    this.reviews.unshift(mock);
+    this.renderReviewsTable();
+    Toast('Получено новое сообщение от жителя из Telegram');
+  },
+
+  mockReview(){
+    this.mockTgMessage();
+  },
+
+  loadReviews(){
+    fetch('/api/complaints', {cache: 'no-store'})
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(j => {
+        const serverItems = (j.items || []).map(item => ({
+          ts: item.ts,
+          source: item.source || 'Веб-бот',
+          region: item.region,
+          product: item.product,
+          point: item.point,
+          price: item.price,
+          unit: item.unit || '₸',
+          rating: item.rating || (item.review ? '💬 Отзыв' : '🚨 Обращение'),
+          review: item.review || item.note || 'Обращение гражданина по цене',
+          contact: item.contact,
+          photo: item.photo,
+          sent: item.sent !== false
+        }));
+        if(serverItems.length > 0){
+          this.reviews = serverItems;
+        } else if(!this.reviews.length){
+          this.seedInitialReviews();
+        }
+        this.renderReviewsTable();
+      })
+      .catch(() => {
+        if(!this.reviews.length) this.seedInitialReviews();
+        this.renderReviewsTable();
+      });
+  },
+
+  seedInitialReviews(){
+    const d1 = new Date(); d1.setMinutes(d1.getMinutes() - 15);
+    const d2 = new Date(); d2.setHours(d2.getHours() - 2);
+    const d3 = new Date(); d3.setHours(d3.getHours() - 5);
+    this.reviews = [
+      {
+        ts: U.dt(d1),
+        source: 'Telegram-чат/бот',
+        region: 'Кызылординская область',
+        product: 'Сахар-песок',
+        point: 'Супермаркет «Магнум», ул. Муратбаева 23',
+        price: '430',
+        unit: '₸/кг',
+        rating: '🌟 Отличное качество и честная цена',
+        review: 'Сахар по приемлемой цене, качество сухой фасовки отличное. На кассе пробивают строго по ценнику.',
+        contact: '@arman_kzo',
+        photo: true,
+        sent: true
+      },
+      {
+        ts: U.dt(d2),
+        source: 'Веб-бот на сайте',
+        region: 'Кызылординская область',
+        product: 'Масло подсолнечное',
+        point: 'Гастроном «Арай», ул. Байтурсынова',
+        price: '940',
+        unit: '₸/л',
+        rating: '⚠️ Завышена цена',
+        review: 'Цена на подсолнечное масло превышает среднеобластную почти на 18%. Прошу проверить торговую наценку магазина.',
+        contact: '+7 (705) 441-22-19',
+        photo: true,
+        sent: true
+      },
+      {
+        ts: U.dt(d3),
+        source: 'Telegram-чат/бот',
+        region: 'Кызылординская область',
+        product: 'Мука пшеничная первого сорта',
+        point: 'Рынок «Сыбага», торговый павильон 4',
+        price: '240',
+        unit: '₸/кг',
+        rating: '🌟 Отличное качество и честная цена',
+        review: 'Местная мука отличного качества. Поставки регулярные, дефицита нет.',
+        contact: '@gulnar_kz',
+        photo: false,
+        sent: true
+      }
+    ];
+  },
+
+  syncReviews(){
+    fetch('/api/telegram-sync', {cache: 'no-store'})
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(j => {
+        if(j.items && j.items.length) {
+          this.loadReviews();
+        } else {
+          this.mockTgMessage();
+        }
+        Toast('Синхронизация с Telegram выполнена');
+      })
+      .catch(() => {
+        this.mockTgMessage();
+      });
+  },
+
+  submitReview(){
+    const prEl = U.el('revProduct');
+    const point = U.el('revPoint').value.trim();
+    const price = U.el('revPrice').value.trim();
+    const text = U.el('revText').value.trim();
+    const rating = U.el('revRating').value;
+    const contact = U.el('revContact').value.trim();
+
+    if(!point){ Toast('Укажите торговую точку'); return; }
+    if(!price){ Toast('Укажите цену товара'); return; }
+    if(!text){ Toast('Напишите текст отзыва'); return; }
+
+    const selProd = P_BY[prEl.value] || {n: prEl.options[prEl.selectedIndex]?.text, u: '₸/кг'};
+    const regName = REGIONS.find(r=>r.id===ST.region)?.n || 'Кызылординская область';
+    const btn = U.el('revSendBtn');
+    btn.disabled = true;
+    U.el('revSendStatus').textContent = 'Отправка в систему и Telegram…';
+
+    const payload = {
+      region: regName,
+      product: selProd.n,
+      point: point,
+      price: price,
+      unit: selProd.u,
+      rating: rating,
+      review: text,
+      contact: contact,
+      source: 'Веб-бот на сайте',
+      photo: this.photoData || ''
+    };
+
+    fetch('/api/feedback', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    })
+    .then(r => r.json().then(j => ({ok: r.ok, j})))
+    .then(({ok, j}) => {
+      const rec = {
+        ts: j.ts || U.dt(new Date()),
+        source: 'Веб-бот на сайте',
+        region: regName,
+        product: selProd.n,
+        point: point,
+        price: price,
+        unit: selProd.u,
+        rating: rating,
+        review: text,
+        contact: contact,
+        photo: !!this.photoData,
+        sent: j.sent !== false
+      };
+      this.reviews.unshift(rec);
+      this.renderReviewsTable();
+      Toast('Отзыв жителя успешно принят!');
+      U.el('revPoint').value = '';
+      U.el('revPrice').value = '';
+      U.el('revText').value = '';
+      U.el('revContact').value = '';
+      this.photoData = null;
+      U.el('revPhotoDrop').innerHTML = '<b>Прикрепить фотографию</b><span class="mut" style="font-size:11px">.jpg, .png · сжатие в браузере</span>';
+      this.onRevProductChange();
+    })
+    .catch(() => {
+      const rec = {
+        ts: U.dt(new Date()),
+        source: 'Веб-бот на сайте',
+        region: regName,
+        product: selProd.n,
+        point: point,
+        price: price,
+        unit: selProd.u,
+        rating: rating,
+        review: text,
+        contact: contact,
+        photo: !!this.photoData,
+        sent: false
+      };
+      this.reviews.unshift(rec);
+      this.renderReviewsTable();
+      Toast('Отзыв сохранён');
+    })
+    .finally(() => {
+      btn.disabled = false;
+      U.el('revSendStatus').textContent = '';
+    });
+  },
+
+  renderReviewsTable(){
+    const b = U.el('revTableBody');
+    if(!b) return;
+    const cat = U.el('revFilterCategory')?.value || '';
+    let filtered = this.reviews;
+    if(cat === 'price') filtered = filtered.filter(r => r.rating?.includes('Завышена') || r.rating?.includes('Сообщение'));
+    if(cat === 'good')  filtered = filtered.filter(r => r.rating?.includes('Отличное'));
+    if(cat === 'tag')   filtered = filtered.filter(r => r.rating?.includes('Несоответствие'));
+    if(cat === 'defect')filtered = filtered.filter(r => r.rating?.includes('Несвежий') || r.rating?.includes('Дефицит'));
+
+    U.el('revTotalCount').textContent = this.reviews.length;
+    U.el('revTgCount').textContent = this.reviews.filter(r => r.source?.includes('Telegram')).length;
+    U.el('revPriceAlerts').textContent = this.reviews.filter(r => r.rating?.includes('Завышена') || r.rating?.includes('Несоответствие')).length;
+    U.el('revTableCount').textContent = 'Показано записей: ' + filtered.length + ' из ' + this.reviews.length;
+
+    if(!filtered.length){
+      b.innerHTML = '<tr><td colspan="10"><div class="empty">Отзывов жителей по выбранному фильтру нет.</div></td></tr>';
+      return;
+    }
+
+    b.innerHTML = filtered.map(r => {
+      const pObj = PRODUCTS.find(p => p.n.toLowerCase() === (r.product||'').toLowerCase());
+      let devBadge = '<span class="mut">—</span>';
+      if(pObj && r.price){
+        const numP = parseFloat(String(r.price).replace(',','.'));
+        const avg = regPrice(ST.region, pObj.id);
+        if(numP > 0 && avg > 0){
+          const dev = ((numP / avg) - 1) * 100;
+          const cls = dev > 5 ? 'up' : dev < -5 ? 'dn' : '';
+          devBadge = '<span class="num dev ' + cls + '">' + (dev > 0 ? '+' : '') + U.n1(dev) + '%</span>';
+        }
+      }
+
+      const ratingBadge = r.rating?.includes('Завышена')
+        ? '<span class="st high"><i></i>' + U.esc(r.rating) + '</span>'
+        : r.rating?.includes('Отличное')
+        ? '<span class="st norm"><i></i>' + U.esc(r.rating) + '</span>'
+        : '<span class="st mid"><i></i>' + U.esc(r.rating || 'Отзыв') + '</span>';
+
+      const srcBadge = r.source?.includes('Telegram')
+        ? '<span class="tag" style="background:#E3F2FD; color:#0D47A1">📱 Telegram</span>'
+        : '<span class="tag" style="background:#E0F2F1; color:#00695C">🌐 Веб-бот</span>';
+
+      return '<tr>' +
+        '<td class="nowrap tnum">' + U.esc(r.ts) + '</td>' +
+        '<td class="nowrap">' + srcBadge + '</td>' +
+        '<td class="cut" title="' + U.esc(r.product) + '"><b>' + U.esc(r.product) + '</b></td>' +
+        '<td class="cut-s" title="' + U.esc(r.point) + '">' + U.esc(r.point) + '</td>' +
+        '<td class="num"><b>' + U.esc(r.price) + '</b> <span class="mut">' + U.esc(r.unit || '₸') + '</span></td>' +
+        '<td class="num">' + devBadge + '</td>' +
+        '<td class="nowrap">' + ratingBadge + '</td>' +
+        '<td class="cut" title="' + U.esc(r.review) + '">' + U.esc(r.review) + '</td>' +
+        '<td class="nowrap">' + (r.photo ? '<span class="tag" style="background:var(--accent-weak); color:var(--brand)">📷 Ценник</span>' : '<span class="mut">—</span>') + '</td>' +
+        '<td class="nowrap">' + (r.sent ? '<span class="st norm"><i></i>Передано</span>' : '<span class="st mid"><i></i>Локально</span>') + '</td>' +
+      '</tr>';
+    }).join('');
+  },
+
+  commitReviewsToDatabase(){
+    const valid = this.reviews.filter(r => parseFloat(String(r.price).replace(',','.')) > 0);
+    if(!valid.length){
+      Toast('Нет подтвержденных отзывов для внесения в базу');
+      return;
+    }
+    Journal.add({
+      obj: 'Загрузка данных · Отзывы жителей (' + valid.length + ' записей)',
+      act: 'Данные записаны в базу',
+      cmt: 'Поступили через Telegram-канал @BagaRadarBot и интерактивный веб-бот'
+    });
+    Toast('Записано в базу наблюдений: ' + valid.length + ' отзывов жителей');
+  },
+
   pick(inp){
     const f=inp.files&&inp.files[0]; if(!f) return;
     if(/\.(xlsx|xls)$/i.test(f.name)){

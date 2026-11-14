@@ -178,7 +178,7 @@ def rates():
 
 # ------------------------------------------------------------------ обращения
 def complaint(body):
-    """Регистрация обращения и передача его в Telegram."""
+    """Регистрация обращения или отзыва жителя и передача его в Telegram."""
     cfg = env()
     chat = cfg.get('TG_CHAT_ID')
     rec = {
@@ -190,13 +190,21 @@ def complaint(body):
         'unit': str(body.get('unit', ''))[:16],
         'contact': str(body.get('contact', ''))[:120],
         'note': str(body.get('note', ''))[:600],
+        'review': str(body.get('review', ''))[:600],
+        'rating': str(body.get('rating', ''))[:60],
+        'source': str(body.get('source', 'Веб-форма'))[:60],
         'photo': bool(body.get('photo'))
     }
-    text = ('Обращение по цене на СЗПТ\n'
+    is_rev = bool(rec.get('review') or rec.get('rating'))
+    title = '📢 Отзыв жителя о товаре' if is_rev else 'Обращение по цене на СЗПТ'
+    text = ('%s\n'
             'Дата: %(ts)s\nРегион: %(region)s\nТовар: %(product)s\n'
             'Торговая точка: %(point)s\nЦена на ценнике: %(price)s %(unit)s\n' % rec)
+    if rec.get('rating'):  text += 'Оценка: %s\n' % rec['rating']
+    if rec.get('review'):  text += 'Отзыв о товаре: %s\n' % rec['review']
     if rec['note']:    text += 'Пояснение: %s\n' % rec['note']
     if rec['contact']: text += 'Обратная связь: %s\n' % rec['contact']
+    if rec.get('source'): text += 'Источник: %s\n' % rec['source']
 
     sent, err = False, None
     if not chat:
@@ -265,8 +273,49 @@ class H(SimpleHTTPRequestHandler):
             self.js({'token': bool(cfg.get('TG_TOKEN')), 'chat': bool(cfg.get('TG_CHAT_ID')),
                      'complaints': len(complaints(10000))})
             return
-        if p == '/api/complaints':
+        if p in ('/api/complaints', '/api/feedback-list'):
             self.js({'items': complaints()}); return
+        if p in ('/api/telegram-sync', '/api/sync'):
+            cfg = env()
+            synced_count = 0
+            if cfg.get('TG_TOKEN'):
+                try:
+                    upd = tg('getUpdates', {'limit': 50})
+                    for u in upd.get('result', []):
+                        m = u.get('message') or u.get('channel_post') or {}
+                        txt = m.get('text') or m.get('caption') or ''
+                        if txt and any(w in txt.lower() for w in ('отзыв', 'цена', 'баға', '₸', 'магазин', 'супермаркет')):
+                            from_user = m.get('from', {})
+                            user_name = from_user.get('username') or ' '.join(filter(None, [from_user.get('first_name'), from_user.get('last_name')])) or 'Житель'
+                            # extract price if mentioned
+                            p_match = re.search(r'(\d+[\d\s]*)\s*(?:тг|₸|тенге)', txt, re.I)
+                            price_val = p_match.group(1).replace(' ', '') if p_match else ''
+                            item = {
+                                'ts': time.strftime('%d.%m.%Y %H:%M', time.localtime(m.get('date', time.time()))),
+                                'region': 'Кызылординская область',
+                                'product': 'СЗПТ (из сообщения)',
+                                'point': 'Торговая точка (Telegram)',
+                                'price': price_val or 'по ценнику',
+                                'unit': '₸',
+                                'contact': '@' + user_name if not user_name.startswith('@') else user_name,
+                                'note': '',
+                                'review': txt[:500],
+                                'rating': '⚠️ Сообщение жителя' if price_val else '💬 Отзыв',
+                                'source': 'Telegram-чат/бот',
+                                'photo': bool(m.get('photo')),
+                                'sent': True
+                            }
+                            # save if not already present
+                            existing = complaints(500)
+                            if not any(e.get('review') == item['review'] and e.get('ts') == item['ts'] for e in existing):
+                                os.makedirs(os.path.dirname(COMPLAINTS), exist_ok=True)
+                                with open(COMPLAINTS, 'a', encoding='utf-8') as f:
+                                    f.write(json.dumps(item, ensure_ascii=False) + '\n')
+                                synced_count += 1
+                except Exception:
+                    pass
+            self.js({'status': 'ok', 'synced': synced_count, 'items': complaints()})
+            return
         if p == '/api/chat-id':
             try:
                 upd = tg('getUpdates', {'limit': 20})
@@ -293,7 +342,7 @@ class H(SimpleHTTPRequestHandler):
         super().end_headers()
 
     def do_POST(self):
-        if self.path.split('?')[0] != '/api/complaint':
+        if self.path.split('?')[0] not in ('/api/complaint', '/api/feedback'):
             self.js({'error': 'неизвестный адрес'}, 404); return
         n = int(self.headers.get('Content-Length') or 0)
         if n > MAX_PHOTO + 2 * 1024 * 1024:
