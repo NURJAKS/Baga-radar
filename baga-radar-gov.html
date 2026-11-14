@@ -10,203 +10,228 @@
   Наблюдения по торговым точкам — демонстрационные, формируются детерминированно.
 -->
 <style>
-/* ============================= токены ============================= */
+/* ============================= токены =============================
+   Палитра прежней версии проекта: фирменный синий, бирюзовый акцент,
+   светлые подложки статусов, скруглённые карточки с мягкой тенью.      */
 :root{
-  --bg:#F6F3EC; --surface:#FFFFFF; --line:#E0DBD0; --line-2:#EDE8DF;
-  --ink:#1C1A16; --ink-2:#55504A; --muted:#7E776D;
-  --accent:#1F4E79; --accent-weak:#EEF3F8; --accent-line:#C7D7E6;
-  --red:#B3261E; --amber:#A66300; --green:#1E6B3A;
-  --row:38px;
-  --font:'Inter','IBM Plex Sans',system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;
+  --brand:#0B5FA5; --brand-d:#084B84;
+  --teal:#0E9AA0; --teal-l:#E4F5F5;
+  --ink:#10243A; --ink-2:#36506B; --muted:#6B8099;
+  --line:#E1E8EF; --line-2:#EEF3F7;
+  --bg:#F6F9FC; --surface:#FFFFFF; --surface-2:#FAFCFE;
+  --accent:#0B5FA5; --accent-weak:#E8F1F9; --accent-line:#B9D4EA;
+  --red:#D13C3C; --red-l:#FCEDED;
+  --amber:#D98A14; --amber-l:#FDF4E3;
+  --green:#18875B; --green-l:#E8F6EF;
+  --radius:10px; --radius-s:7px;
+  --shadow:0 1px 2px rgba(16,36,58,.06), 0 4px 16px rgba(16,36,58,.06);
+  --row:40px;
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI","Inter","Helvetica Neue",Arial,"Noto Sans",sans-serif;
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
-body{background:var(--bg); color:var(--ink); font-family:var(--font); font-size:14px; line-height:1.45;
+body{background:var(--bg); color:var(--ink); font-family:var(--font); font-size:13.5px; line-height:1.5;
      -webkit-font-smoothing:antialiased}
 button,input,select,textarea{font:inherit; color:inherit}
-a{color:var(--accent)}
+a{color:var(--brand)}
 .num{text-align:right; font-variant-numeric:tabular-nums}
 .tnum{font-variant-numeric:tabular-nums}
 .mut{color:var(--muted)}
 .nowrap{white-space:nowrap}
 
 /* ============================= каркас ============================= */
-.shell{display:grid; grid-template-columns:216px minmax(0,1fr); min-height:100vh}
+.shell{display:grid; grid-template-columns:232px minmax(0,1fr); min-height:100vh}
 
 .side{background:var(--surface); border-right:1px solid var(--line); position:sticky; top:0;
       height:100vh; display:flex; flex-direction:column; overflow:auto}
-.side .brand{padding:16px; border-bottom:1px solid var(--line)}
-.side .brand b{display:block; font-size:15px; letter-spacing:-.01em}
-.side .brand span{display:block; font-size:11.5px; color:var(--muted); line-height:1.35; margin-top:3px}
-.side nav{padding:8px 0; flex:1}
-.side .grp{font-size:11px; color:var(--muted); padding:12px 16px 5px}
-.side a.mi{display:flex; align-items:center; gap:8px; padding:8px 16px; font-size:13.5px;
-           color:var(--ink-2); text-decoration:none; border-left:3px solid transparent; cursor:pointer}
-.side a.mi:hover{background:#FAF7F0; color:var(--ink)}
-.side a.mi.on{background:var(--accent-weak); color:var(--accent); border-left-color:var(--accent); font-weight:600}
-.side a.mi .cnt{margin-left:auto; font-size:11.5px; color:var(--muted); font-variant-numeric:tabular-nums}
-.side a.mi.on .cnt{color:var(--accent)}
-.side .foot{border-top:1px solid var(--line); padding:8px 0}
+.side .brand{padding:18px 18px 16px; border-bottom:1px solid var(--line-2)}
+.side .brand b{display:block; font-size:16px; letter-spacing:-.01em}
+.side .brand span{display:block; font-size:11.5px; color:var(--muted); line-height:1.4; margin-top:4px}
+.side nav{padding:10px 10px; flex:1}
+.side .grp{font-size:11px; color:var(--muted); padding:12px 8px 5px}
+.side a.mi{display:flex; align-items:center; gap:8px; padding:9px 12px; font-size:13.5px; font-weight:550;
+           color:var(--ink-2); text-decoration:none; border-radius:var(--radius-s); cursor:pointer;
+           margin-bottom:2px; transition:.12s}
+.side a.mi:hover{background:var(--bg); color:var(--ink)}
+.side a.mi.on{background:var(--accent-weak); color:var(--brand); font-weight:650}
+.side a.mi .cnt{margin-left:auto; font-size:11px; font-weight:650; color:var(--muted);
+                background:var(--bg); border-radius:100px; padding:1px 7px; font-variant-numeric:tabular-nums}
+.side a.mi.on .cnt{color:#fff; background:var(--brand)}
+.side .foot{border-top:1px solid var(--line-2); padding:10px}
 
 .main{min-width:0; display:flex; flex-direction:column}
 
 /* ============================= шапка ============================= */
-.hdr{background:var(--surface); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:6}
-.hdr .r1{display:flex; align-items:center; gap:16px; padding:10px 20px}
-.hdr h1{font-size:16px; font-weight:600; margin:0; letter-spacing:-.01em}
+.hdr{position:sticky; top:0; z-index:6}
+.hdr .r1{display:flex; align-items:center; gap:16px; padding:15px 22px; color:#fff;
+         background:linear-gradient(107deg,#073A66 0%,#0B5FA5 52%,#0E9AA0 100%)}
+.hdr h1{font-size:19px; font-weight:650; margin:0; letter-spacing:-.02em}
 .hdr .sp{flex:1}
 .hdr .who{text-align:right; font-size:12.5px; line-height:1.3}
-.hdr .who span{color:var(--ink-2); font-size:12.5px}
-.hdr .r2{display:flex; align-items:center; gap:18px; padding:7px 20px; border-top:1px solid var(--line-2);
-         background:#FBF9F3; font-size:12.5px; flex-wrap:wrap}
-.hdr .fld{display:flex; align-items:center; gap:6px}
+.hdr .who span{color:rgba(255,255,255,.82); font-size:12.5px}
+.hdr .r2{display:flex; align-items:center; gap:18px; padding:9px 22px; background:var(--surface);
+         border-bottom:1px solid var(--line); font-size:12.5px; flex-wrap:wrap}
+.hdr .fld{display:flex; align-items:center; gap:7px}
 .hdr .fld label{color:var(--muted)}
 .hdr .upd{margin-left:auto; color:var(--muted); font-size:12px}
 
 /* ============================= элементы ============================= */
 select,input[type=text],input[type=date],textarea{
-  background:var(--surface); border:1px solid var(--line); border-radius:4px; padding:5px 8px;
+  background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-s); padding:6px 10px;
   font-size:13px; color:var(--ink); outline:none}
-select:focus,input:focus,textarea:focus{border-color:var(--accent); box-shadow:inset 0 0 0 1px var(--accent)}
-select{padding-right:22px}
-.btn{background:var(--surface); border:1px solid var(--line); border-radius:4px; padding:6px 12px;
-     font-size:13px; cursor:pointer; color:var(--ink)}
-.btn:hover{background:#F1EDE4}
-.btn-p{background:var(--accent); border-color:var(--accent); color:#fff}
-.btn-p:hover{background:#19406A}
-.btn-sm{padding:4px 9px; font-size:12.5px}
-.btn:disabled{color:var(--muted); background:#F6F3EC; cursor:default}
+select:focus,input:focus,textarea:focus{border-color:var(--brand); box-shadow:0 0 0 3px var(--accent-weak)}
+select{padding-right:24px}
+.btn{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-s); padding:7px 13px;
+     font-size:12.5px; font-weight:600; cursor:pointer; color:var(--ink-2); transition:.12s}
+.btn:hover{border-color:var(--accent-line); color:var(--ink)}
+.btn-p{background:var(--brand); border-color:var(--brand); color:#fff}
+.btn-p:hover{background:var(--brand-d); border-color:var(--brand-d); color:#fff}
+.btn-sm{padding:5px 10px; font-size:12px}
+.btn:disabled{color:var(--muted); background:var(--bg); border-color:var(--line); cursor:default}
 
-.panel{background:var(--surface); border:1px solid var(--line); border-radius:4px}
-.panel>.ph{display:flex; align-items:center; gap:12px; padding:10px 14px; border-bottom:1px solid var(--line)}
-.panel>.ph h2{font-size:16px; font-weight:600; margin:0}
+.panel{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
+       box-shadow:var(--shadow); overflow:hidden}
+.panel>.ph{display:flex; align-items:center; gap:12px; padding:14px 18px; border-bottom:1px solid var(--line-2);
+           flex-wrap:wrap}
+.panel>.ph h2{font-size:15px; font-weight:650; margin:0; letter-spacing:-.01em}
 .panel>.ph .sp{flex:1}
-.panel>.pb{padding:14px}
+.panel>.pb{padding:18px}
 
-.page{padding:16px 20px 28px; display:none}
+.page{padding:20px 22px 40px; display:none}
 .page.on{display:block}
-.page>.pt{margin:0 0 14px}
-.page>.pt h2{font-size:16px; font-weight:600; margin:0 0 3px}
-.page>.pt p{margin:0; font-size:12.5px; color:var(--ink-2); max-width:112ch}
+.page>.pt{margin:0 0 16px}
+.page>.pt h2{font-size:19px; font-weight:650; margin:0 0 5px; letter-spacing:-.02em}
+.page>.pt p{margin:0; font-size:13px; color:var(--ink-2); max-width:108ch; line-height:1.55}
 
 /* ============================= таблицы ============================= */
 .tw{overflow:auto; max-width:100%}
 table.t{width:100%; border-collapse:collapse; font-size:13px}
-table.t th{position:sticky; top:0; background:#FBF9F3; border-bottom:1px solid var(--line);
-  text-align:left; font-weight:600; font-size:12px; color:var(--ink-2); padding:7px 10px;
+table.t th{position:sticky; top:0; background:var(--surface-2); border-bottom:1px solid var(--line);
+  text-align:left; font-weight:650; font-size:11.5px; color:var(--muted); padding:9px 12px;
   white-space:nowrap; z-index:1}
 table.t th.num{text-align:right}
 table.t th.srt{cursor:pointer; user-select:none}
-table.t th.srt:hover{color:var(--accent)}
-table.t th .ar{color:var(--accent); font-size:10px}
-table.t td{border-bottom:1px solid var(--line-2); padding:0 10px; height:var(--row); vertical-align:middle}
-table.t tbody tr:hover{background:#FAF7F0}
+table.t th.srt:hover{color:var(--brand)}
+table.t th .ar{color:var(--brand); font-size:10px}
+table.t td{border-bottom:1px solid var(--line-2); padding:0 12px; height:var(--row); vertical-align:middle}
+table.t tbody tr{transition:.1s}
+table.t tbody tr:hover{background:var(--bg)}
 table.t tbody tr.sel{background:var(--accent-weak)}
-table.t tbody tr.sel td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
+table.t tbody tr.sel td:first-child{box-shadow:inset 3px 0 0 var(--brand)}
 table.t.click tbody tr{cursor:pointer}
 table.t tbody tr.off td{color:var(--muted)}
-table.t td.cut{max-width:270px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-table.t td.cut-s{max-width:230px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-.empty{padding:28px 14px; text-align:center; color:var(--muted); font-size:13px}
+table.t td.cut{max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+table.t td.cut-s{max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.empty{padding:34px 16px; text-align:center; color:var(--muted); font-size:13px}
 
 /* ============================= статусы ============================= */
-.st{display:inline-flex; align-items:center; gap:6px; white-space:nowrap}
-.st i{width:8px; height:8px; border-radius:50%; flex:none; background:var(--muted)}
-.st.high i{background:var(--red)} .st.mid i{background:var(--amber)} .st.norm i{background:var(--green)}
-.st.high{color:var(--red)} .st.mid{color:var(--amber)}
-.tag{display:inline-block; border:1px solid var(--line); border-radius:3px; padding:1px 6px;
-     font-size:11.5px; color:var(--ink-2); background:#FBF9F3; white-space:nowrap}
-.dev.up{color:var(--red)} .dev.dn{color:var(--green)}
+.st{display:inline-block; padding:2.5px 9px; border-radius:100px; font-size:11px; font-weight:650;
+    white-space:nowrap; background:var(--bg); color:var(--ink-2)}
+.st i{display:none}
+.st.high{background:var(--red-l); color:var(--red)}
+.st.mid{background:var(--amber-l); color:#A8690C}
+.st.norm{background:var(--green-l); color:var(--green)}
+.tag{display:inline-block; border-radius:100px; padding:2.5px 9px; font-size:11px; font-weight:650;
+     color:var(--brand); background:var(--accent-weak); white-space:nowrap}
+.dev.up{color:var(--red); font-weight:600} .dev.dn{color:var(--green); font-weight:600}
 
 /* ============================= сводная строка ============================= */
-.sum{display:flex; gap:0; flex-wrap:wrap; border:1px solid var(--line); border-radius:4px;
-     background:var(--surface); margin-bottom:12px}
-.sum div{padding:8px 14px; border-right:1px solid var(--line-2); font-size:12.5px}
-.sum div:last-child{border-right:0}
-.sum b{font-variant-numeric:tabular-nums; font-weight:600; margin-right:5px}
-
-.rmap{display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:6px; padding:14px}
-.rg{border:1px solid var(--line); border-radius:4px; background:var(--surface); padding:7px 8px;
-    text-align:left; cursor:pointer; min-width:0; font:inherit; color:inherit}
-.rg:hover{border-color:var(--accent)}
-.rg.home{box-shadow:inset 0 0 0 1px var(--accent); border-color:var(--accent)}
-.rg .nm{display:block; font-size:11px; color:var(--ink-2); white-space:nowrap; overflow:hidden;
-        text-overflow:ellipsis; margin-bottom:3px}
-.rg .pr{display:block; font-size:13.5px; font-weight:600; font-variant-numeric:tabular-nums}
-.rg .dv{display:block; font-size:11px; font-variant-numeric:tabular-nums; color:var(--muted); margin-top:1px}
-.rg .st{font-size:11px; margin-top:3px}
-@media (max-width:1100px){ .rmap{grid-template-columns:repeat(4,minmax(0,1fr))} .rg{grid-column:auto!important; grid-row:auto!important} }
-@media (max-width:700px){ .rmap{grid-template-columns:repeat(2,minmax(0,1fr))} }
-
-.fx td.cur{white-space:nowrap}
-.fx td.cur b{font-weight:600}
-.fx td.cur span{color:var(--muted); font-size:11.5px; margin-left:5px}
-.fx td.rate{font-size:15px; font-weight:600}
-.fx .pct{color:var(--muted); font-size:11.5px; margin-left:4px}
-.fx .spark{display:block}
-.fx .spark path{fill:none; stroke:var(--ink-2); stroke-width:1.3}
-.fx .spark circle{fill:var(--accent)}
+.sum{display:grid; grid-template-columns:repeat(auto-fit,minmax(152px,1fr)); gap:12px; margin-bottom:18px}
+.sum div{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
+         box-shadow:var(--shadow); padding:13px 15px; font-size:11.5px; color:var(--muted);
+         font-weight:550; line-height:1.35}
+.sum b{display:block; font-size:24px; font-weight:700; color:var(--ink); letter-spacing:-.025em;
+       font-variant-numeric:tabular-nums; margin:0 0 3px}
+.sum div.mut{display:flex; align-items:center}
 
 /* ============================= фильтры ============================= */
-.flt{display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; padding:10px 14px;
-     border-bottom:1px solid var(--line); background:#FBF9F3}
-.flt .f{display:flex; flex-direction:column; gap:3px}
-.flt .f label{font-size:11.5px; color:var(--muted)}
+.flt{display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap; padding:14px 18px;
+     border-bottom:1px solid var(--line-2); background:var(--surface-2)}
+.flt .f{display:flex; flex-direction:column; gap:4px}
+.flt .f label{font-size:11px; color:var(--muted); font-weight:550}
 .flt .sp{flex:1}
 
 /* ============================= рабочая область ============================= */
-.work{display:grid; grid-template-columns:minmax(0,1fr) 430px; gap:16px; align-items:start}
+.work{display:grid; grid-template-columns:minmax(0,1fr) 440px; gap:18px; align-items:start}
 .work.wide{grid-template-columns:minmax(0,1fr)}
 .work.wide .insp{display:none}
-.insp{position:sticky; top:96px}
-.insp .sec{padding:12px 14px; border-bottom:1px solid var(--line-2)}
+.insp{position:sticky; top:106px}
+.insp .sec{padding:16px 18px; border-bottom:1px solid var(--line-2)}
 .insp .sec:last-child{border-bottom:0}
-.insp h3{font-size:13px; font-weight:600; margin:0 0 8px}
+.insp h3{font-size:13px; font-weight:650; margin:0 0 10px}
 .insp .close{margin-left:auto; background:none; border:0; cursor:pointer; color:var(--muted); font-size:15px; padding:0 2px}
 .insp .close:hover{color:var(--ink)}
 
-dl.kv{margin:0; display:grid; grid-template-columns:auto 1fr; gap:5px 14px; font-size:12.5px}
+dl.kv{margin:0; display:grid; grid-template-columns:auto 1fr; gap:7px 14px; font-size:12.5px}
 dl.kv dt{color:var(--muted)}
-dl.kv dd{margin:0; text-align:right; font-variant-numeric:tabular-nums}
+dl.kv dd{margin:0; text-align:right; font-variant-numeric:tabular-nums; font-weight:550}
 dl.kv dd.l{text-align:left}
 
-.chart{width:100%; height:150px; display:block}
+.chart{width:100%; height:156px; display:block}
 .chart text{font-family:var(--font); font-size:10px; fill:var(--muted)}
-.lg{display:flex; gap:14px; font-size:11.5px; color:var(--ink-2); margin-top:6px; flex-wrap:wrap}
+.lg{display:flex; gap:14px; font-size:11.5px; color:var(--ink-2); margin-top:8px; flex-wrap:wrap}
 .lg i{display:inline-block; width:14px; height:0; border-top:2px solid; margin-right:5px; vertical-align:middle}
 
-.ev{border:1px solid var(--line); border-radius:4px; padding:10px; font-size:12.5px; background:#FBF9F3}
-.ev .ph{height:92px; border:1px dashed var(--line); border-radius:3px; display:flex; align-items:center;
-        justify-content:center; color:var(--muted); font-size:12px; background:var(--surface); margin-bottom:8px;
+.ev{border:1px solid var(--line); border-radius:var(--radius-s); padding:12px; font-size:12.5px; background:var(--surface-2)}
+.ev .ph{height:96px; border:1px dashed var(--line); border-radius:var(--radius-s); display:flex; align-items:center;
+        justify-content:center; color:var(--muted); font-size:12px; background:var(--surface); margin-bottom:10px;
         overflow:hidden}
-.ev .ph img{max-width:100%; max-height:92px; display:block}
+.ev .ph img{max-width:100%; max-height:96px; display:block}
 
-.act{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px}
-textarea{width:100%; resize:vertical; min-height:58px; font-size:13px}
+.act{display:flex; gap:9px; flex-wrap:wrap; margin-top:12px}
+textarea{width:100%; resize:vertical; min-height:62px; font-size:13px}
 
 /* ============================= загрузка ============================= */
-.drop{display:block; border:1px dashed var(--line); border-radius:4px; background:#FBF9F3;
-      padding:22px; text-align:center; cursor:pointer; font-size:13px; color:var(--ink-2)}
-.drop:hover{border-color:var(--accent); background:var(--accent-weak)}
-.drop b{display:block; font-weight:600; color:var(--ink); margin-bottom:3px}
+.drop{display:block; border:1.5px dashed var(--accent-line); border-radius:var(--radius); background:var(--accent-weak);
+      padding:26px; text-align:center; cursor:pointer; font-size:13px; color:var(--ink-2); transition:.12s}
+.drop:hover{border-color:var(--brand); background:#DEEBF6}
+.drop b{display:block; font-weight:650; color:var(--ink); margin-bottom:4px}
 .sr{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0)}
-.err-row td{background:#FCF3F0}
-.fix-row td{background:#F3F7EF}
+.err-row td{background:var(--red-l)}
+.fix-row td{background:var(--green-l)}
 
 /* ============================= вкладки ============================= */
-.tabs{display:flex; gap:0; border-bottom:1px solid var(--line); background:#FBF9F3}
-.tabs button{background:none; border:0; border-bottom:2px solid transparent; padding:9px 14px;
-             font-size:13px; cursor:pointer; color:var(--ink-2)}
+.tabs{display:flex; gap:0; border-bottom:1px solid var(--line); background:var(--surface)}
+.tabs button{background:none; border:0; border-bottom:2px solid transparent; padding:12px 16px;
+             font-size:13.5px; font-weight:550; cursor:pointer; color:var(--ink-2); margin-bottom:-1px}
 .tabs button:hover{color:var(--ink)}
-.tabs button.on{color:var(--accent); border-bottom-color:var(--accent); font-weight:600}
+.tabs button.on{color:var(--brand); border-bottom-color:var(--brand); font-weight:650}
+
+/* ============================= схема регионов ============================= */
+.rmap{display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:8px; padding:18px}
+.rg{border:1px solid var(--line); border-radius:8px; background:var(--surface); padding:9px 10px;
+    text-align:left; cursor:pointer; min-width:0; font:inherit; color:inherit; transition:.12s}
+.rg:hover{border-color:var(--brand)}
+.rg:has(.st.high){background:var(--red-l); border-color:#F3C9C9}
+.rg:has(.st.mid){background:var(--amber-l); border-color:#F2DFBB}
+.rg:has(.st.norm){background:var(--green-l); border-color:#CFE9DD}
+.rg.home{box-shadow:0 0 0 2px var(--brand); border-color:var(--brand)}
+.rg .nm{display:block; font-size:11px; font-weight:650; color:var(--ink); white-space:nowrap; overflow:hidden;
+        text-overflow:ellipsis; margin-bottom:4px}
+.rg .pr{display:block; font-size:15px; font-weight:700; letter-spacing:-.02em; font-variant-numeric:tabular-nums}
+.rg .dv{display:block; font-size:10.5px; font-variant-numeric:tabular-nums; color:var(--ink-2); margin-top:1px}
+.rg .st{font-size:10px; margin-top:5px; padding:1.5px 7px}
+@media (max-width:1100px){ .rmap{grid-template-columns:repeat(4,minmax(0,1fr))} .rg{grid-column:auto!important; grid-row:auto!important} }
+@media (max-width:700px){ .rmap{grid-template-columns:repeat(2,minmax(0,1fr))} }
+
+/* ============================= курсы валют ============================= */
+.fx td.cur{white-space:nowrap}
+.fx td.cur b{font-weight:650}
+.fx td.cur span{color:var(--muted); font-size:11px; margin-left:6px}
+.fx td.rate{font-size:16px; font-weight:700; letter-spacing:-.02em}
+.fx .pct{color:var(--muted); font-size:11px; margin-left:5px}
+.fx .spark{display:block}
+.fx .spark path{fill:none; stroke:var(--teal); stroke-width:1.5}
+.fx .spark circle{fill:var(--brand)}
 
 /* ============================= служебное ============================= */
-.note{font-size:11.5px; color:var(--muted); margin:8px 0 0}
+.note{font-size:11.5px; color:var(--muted); margin:10px 0 0; line-height:1.5}
 .mdl{border-bottom:1px dotted var(--muted); cursor:help}
-.pagefoot{padding:14px 20px 22px; color:var(--muted); font-size:11.5px; border-top:1px solid var(--line);
+.pagefoot{padding:18px 22px 26px; color:var(--muted); font-size:11.5px; border-top:1px solid var(--line);
           margin-top:auto; background:var(--surface)}
-.toast{position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:#1C1A16; color:#fff;
-       padding:9px 16px; border-radius:4px; font-size:13px; opacity:0; pointer-events:none; transition:opacity .15s; z-index:40}
+.toast{position:fixed; left:50%; bottom:26px; transform:translateX(-50%); background:var(--ink); color:#fff;
+       padding:11px 18px; border-radius:var(--radius-s); font-size:13px; font-weight:550; opacity:0;
+       pointer-events:none; transition:opacity .15s; z-index:40; box-shadow:0 8px 40px rgba(16,36,58,.16)}
 .toast.on{opacity:1}
 
 @media (max-width:1180px){
@@ -217,10 +242,11 @@ textarea{width:100%; resize:vertical; min-height:58px; font-size:13px}
   .shell{grid-template-columns:1fr}
   .side{position:static; height:auto; flex-direction:row; overflow-x:auto; border-right:0; border-bottom:1px solid var(--line)}
   .side .brand,.side .foot{display:none}
-  .side nav{display:flex; padding:0}
+  .side nav{display:flex; padding:4px}
   .side .grp{display:none}
-  .side a.mi{border-left:0; border-bottom:3px solid transparent; white-space:nowrap}
-  .side a.mi.on{border-left:0; border-bottom-color:var(--accent)}
+  .side a.mi{white-space:nowrap}
+  .page{padding:14px 12px 30px}
+  .hdr .r1,.hdr .r2{padding-left:14px; padding-right:14px}
 }
 </style>
 
@@ -762,7 +788,7 @@ function chartSVG(series, labels, fmt){
   for(let i=0;i<=2;i++){
     const v=min+(max-min)*i/2, yy=y(v);
     g+='<line x1="'+L+'" y1="'+yy.toFixed(1)+'" x2="'+(W-R)+'" y2="'+yy.toFixed(1)+
-       '" stroke="#EDE8DF"/><text x="'+(L-6)+'" y="'+(yy+3.5).toFixed(1)+'" text-anchor="end">'+
+       '" stroke="#EEF3F7"/><text x="'+(L-6)+'" y="'+(yy+3.5).toFixed(1)+'" text-anchor="end">'+
        fmt(v)+'</text>';
   }
   labels.forEach((l,i)=>{ g+='<text x="'+x(i).toFixed(1)+'" y="'+(H-6)+'" text-anchor="middle">'+l+'</text>'; });
@@ -1031,9 +1057,9 @@ const Sig={
       '</dl></div>'+
 
       '<div class="sec"><h3>Динамика цены, недели '+labels[0]+'–'+labels[WEEKS-1]+'</h3>'+
-        chartSVG([{v:ser,c:'#1F4E79'},{v:serM,c:'#7E776D',dash:1}],labels,v=>U.n(v))+
-        '<div class="lg"><span><i style="border-color:#1F4E79"></i>цена торговой точки</span>'+
-        '<span><i style="border-color:#7E776D;border-top-style:dashed"></i>медиана района</span></div>'+
+        chartSVG([{v:ser,c:'#0B5FA5'},{v:serM,c:'#6B8099',dash:1}],labels,v=>U.n(v))+
+        '<div class="lg"><span><i style="border-color:#0B5FA5"></i>цена торговой точки</span>'+
+        '<span><i style="border-color:#6B8099;border-top-style:dashed"></i>медиана района</span></div>'+
         '<p class="note">Единица измерения: '+p.u+'. Источник: наблюдения мониторинга акимата.</p></div>'+
 
       '<div class="sec"><h3>Цены соседних торговых точек, нед. '+ST.week+'</h3>'+
